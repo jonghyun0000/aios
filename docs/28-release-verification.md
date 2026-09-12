@@ -59,3 +59,7 @@ CI 동작 도구는 공식 릴리스 [checkout v7.0.1](https://github.com/action
 이후 최신 프롬프트 빌드로 사용자 시작기를 통해 정상 종료·재시작했다. 시작 시각 `2026-09-12T10:52:09.581Z`, instance `2912bba6-bfd6-4718-84cd-1fdd7ad54e93`, 새 빌드 7,723ms, API·worker·Postgres·Redis ready를 확인했다. 기존 프로세스의 정상 종료와 잠금 해제 후 새 API가 같은 workspace 소유권을 얻었다. 실제 브라우저 재열기·입력창·사이드바·오류 콘솔도 확인했다. 1280×577 화면의 최신 캡처는 `/Volumes/T7/bigdata/tmp/aios-release90-feMAI9/final-chat.png`다.
 
 실제 맥락·모델 근거는 [대화·자료 검증](25-context-and-evidence.md), 승인부터 복구까지 한 업무의 근거는 [대표 업무](29-representative-workflow.md)로 분리한다. 원격 CI 완료 여부는 해당 커밋에서 별도 확인한다. 다른 M1 Mac, 독립 디스크 복원, 개발자 외 신규 사용자 관찰은 이번 현재 Mac 검증과 구분한다.
+
+### 동일 구현 커밋의 원격 CI
+
+구현 커밋 `45636ce313e7a2afa16995ada09b964dcbf9b4d3`의 [GitHub Actions 실행](https://github.com/jonghyun0000/aios/actions/runs/34689809471)이 실제 Linux runner에서 **completed/success**, 2분58초로 종료됐다. head SHA와 각 단계 결과를 대조하고 로그의 실제 구조화 단언 수를 확인했다. 잠금 의존성 설치·타입·린트·빌드, 이식 가능 단위450/450, 읽기 전용 진단/검증기 경계51개, 독립 정적 데모24개, 실제 앱의 합성 API 접근성36/36이 통과했다. 접근성의 FAIL/SKIP/flaky/재시도는0이다. 현재 Mac의 실행 보고서와 원격 검사를 구분해 추적할 수 있으며, 이 확인 후 고정 평가표를90점으로 확정했다.
