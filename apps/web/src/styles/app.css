@@ -1,0 +1,377 @@
+/*
+ * 손으로 쓴 CSS.
+ * Tailwind/CSS-in-JS를 넣지 않은 이유: 이 앱의 화면은 7개이고 디자인 시스템은 토큰 12개면 충분하다.
+ * 빌드 파이프라인을 하나 더 얹는 대가를 정당화하지 못한다.
+ *
+ * 다크/라이트는 prefers-color-scheme으로 자동 전환한다 — 개발자 도구가 주 사용처이고,
+ * 그 사용자들은 대부분 시스템 테마를 이미 정해 두었다.
+ */
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f6f7f9;
+  --bg-raised: #ffffff;
+  --border: #e3e5e9;
+  --text: #17191c;
+  /*
+   * 실측으로 옮긴 값. #6b7280 은 사이드바 배경(#f6f7f9)에서 정확히 4.51:1 이었다 —
+   * AA 기준 4.5 를 **여유 0.01 로** 넘긴다. 통과하긴 하지만 두 변수 중 어느 쪽을
+   * 한 단계만 건드려도 무너지는 자리다. 게다가 이 색이 붙는 곳은 11~12px 보조 텍스트라
+   * 실제로 가장 읽기 어려운 조합이다.
+   * #5f6773 은 같은 배경에서 5.33:1 (여유 0.83), 흰 배경에서 5.72:1 이면서
+   * 본문(#17191c)과의 구분은 그대로다. 다크 테마는 이미 6.49~7.43 이라 손대지 않는다.
+   */
+  --text-muted: #5f6773;
+  --accent: #4f46e5;
+  --accent-contrast: #ffffff;
+  --danger: #dc2626;
+  --success: #15803d;
+  --warning: #b45309;
+  --radius: 10px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --bg-subtle: #161920;
+    --bg-raised: #1b1f27;
+    --border: #2a2f3a;
+    --text: #e8eaed;
+    --text-muted: #9aa3b2;
+    --accent: #7c74ff;
+    --accent-contrast: #0f1115;
+    --danger: #f87171;
+    --success: #4ade80;
+    --warning: #fbbf24;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
+
+/* ---------- 레이아웃 ---------- */
+.shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); height: 100%; }
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+  padding: 16px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+  overflow: hidden;
+}
+.sidebar-primary { flex: 0 0 auto; }
+.nav-links { display: flex; flex-direction: column; gap: 3px; }
+.sidebar-chat-heading { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+.sidebar-new { width: 100%; text-align: left; }
+.history-toggle { display: none; }
+.sidebar-history { display: flex; flex-direction: column; flex: 1; min-height: 80px; overflow: hidden; }
+.sidebar-history h2 { margin: 18px 10px 6px; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.history-more { width: 100%; margin: 10px 0; font-size: 12px; }
+.brand { font-weight: 700; font-size: 16px; padding: 4px 10px 14px; letter-spacing: -0.01em; }
+.brand small { display: block; font-weight: 400; font-size: 11px; color: var(--text-muted); letter-spacing: 0; }
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 8px; color: var(--text); font-weight: 500;
+}
+.nav-item:hover { background: var(--bg-raised); text-decoration: none; }
+.nav-item.active { background: var(--accent); color: var(--accent-contrast); }
+.nav-spacer { flex: 1; }
+.main { overflow-y: auto; padding: 28px 32px 48px; }
+.main-narrow { max-width: 900px; }
+.main-chat { padding-bottom: 18px; overflow: hidden; min-height: 0; }
+
+h1 { font-size: 21px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 26px 0 10px; }
+.page-sub { color: var(--text-muted); margin: 0 0 22px; }
+
+/* ---------- 요소 ---------- */
+.card {
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+}
+.grid { display: grid; gap: 12px; }
+.grid-3 { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.row { display: flex; gap: 8px; align-items: center; }
+.row-between { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.wrap { flex-wrap: wrap; }
+.muted { color: var(--text-muted); }
+.small { font-size: 12px; }
+
+button, .btn {
+  font: inherit; font-weight: 500; cursor: pointer;
+  padding: 7px 13px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--text);
+  /* flex 컨테이너 안에서 버튼이 찌그러져 라벨이 줄바꿈되는 것을 막는다.
+     input이 flex:1로 공간을 다 먹으면 버튼이 최소 너비까지 눌린다. */
+  white-space: nowrap; flex: 0 0 auto;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+button.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+
+input, textarea, select {
+  font: inherit; width: 100%; min-width: 0;
+  padding: 8px 11px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+label { display: block; font-weight: 500; margin-bottom: 5px; }
+.field { margin-bottom: 14px; }
+
+.badge {
+  display: inline-block; padding: 1px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; border: 1px solid var(--border); color: var(--text-muted);
+}
+.badge.ok { color: var(--success); border-color: currentColor; }
+.badge.warn { color: var(--warning); border-color: currentColor; }
+.badge.err { color: var(--danger); border-color: currentColor; }
+
+.alert {
+  border-radius: 8px; padding: 10px 13px; margin-bottom: 14px;
+  border: 1px solid var(--danger); color: var(--danger); background: transparent;
+}
+.alert.info { border-color: var(--border); color: var(--text-muted); }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+
+/* ---------- 로그인 ---------- */
+.login-wrap { display: grid; place-items: center; height: 100%; padding: 20px; }
+.login-card { width: 100%; max-width: 400px; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 12px; margin: 20px 0; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* ---------- 채팅 ---------- */
+.chat-page { max-width: 920px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+.chat-layout { flex: 1; display: flex; min-height: 0; }
+.session-list { overflow-y: auto; min-height: 0; padding: 0 2px 8px; }
+.session-item {
+  display: block; padding: 8px 10px; border-radius: 8px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.session-item:hover { background: var(--bg-raised); text-decoration: none; }
+.session-row { display: flex; align-items: center; min-width: 0; }
+.session-row .session-item { flex: 1; min-width: 0; }
+.session-menu { flex: 0 0 30px; padding: 4px; background: transparent; border: 0; }
+.session-project { display: block; color: var(--text-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.history-controls { padding: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.history-controls input { min-width: 0; width: 100%; }
+.history-controls button { font-size: 12px; padding: 4px 8px; }
+.workspace-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.workspace-actions input { flex: 1; min-width: 120px; }
+.workspace-dialog { color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; box-sizing: border-box; }
+.workspace-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+.workspace-dialog h2 { margin: 0; }
+.workspace-dialog label { display: block; margin: 14px 0; }
+.workspace-dialog label input, .workspace-dialog label select { display: block; margin-top: 6px; }
+.workspace-dialog hr { border: 0; border-top: 1px solid var(--border); margin: 22px 0; }
+.reference-list { list-style: none; padding: 0; }
+.reference-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.reference-list li > div { min-width: 0; overflow-wrap: anywhere; }
+.reference-list small { display: block; }
+.file-picker input { max-width: 100%; font-size: 12px; }
+.session-item.active { background: var(--bg-raised); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
+.chat-main { display: flex; flex-direction: column; min-height: 0; width: 100%; }
+.chat-welcome { flex: 1; min-height: 100px; display: grid; place-items: center; text-align: center; overflow: auto; }
+.chat-welcome h2 { font-size: 24px; letter-spacing: -.03em; margin: 14px 0 8px; }
+.welcome-symbol { color: var(--accent); font-size: 32px; }
+.chat-options { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding-top: 14px; }
+.mode-control { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 0; color: var(--text-muted); }
+.mode-control select { width: auto; padding: 5px 8px; font-size: 12px; }
+.tools-option { margin: 0; }
+.mode-hint { margin-top: 8px; font-size: 11px; }
+.generation-status { padding-top: 8px; }
+.composer-help { text-align: center; padding-top: 7px; font-size: 11px; }
+.messages { flex: 1; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 14px; }
+.msg { display: flex; gap: 10px; }
+.msg-role {
+  flex: 0 0 30px; height: 30px; border-radius: 8px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--bg-subtle); border: 1px solid var(--border);
+}
+.msg-body { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.thinking {
+  border-left: 2px solid var(--border); padding-left: 10px;
+  color: var(--text-muted); font-size: 13px; white-space: pre-wrap;
+}
+.tool-chip {
+  display: inline-flex; gap: 6px; align-items: center;
+  border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px;
+  font-family: var(--mono); font-size: 11.5px; margin-right: 6px;
+}
+.composer { display: flex; gap: 8px; padding-top: 14px; border-top: 1px solid var(--border); margin-top: 12px; }
+.composer textarea { resize: none; min-height: 76px; line-height: 1.6; }
+.composer button { align-self: flex-end; height: 40px; }
+
+/* ---------- 협업 ---------- */
+.editor {
+  width: 100%; min-height: 420px; font-family: var(--mono); font-size: 13px; line-height: 1.6;
+  padding: 14px; resize: vertical;
+}
+.peer-dot {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 9px 2px 6px; border-radius: 20px; border: 1px solid var(--border); font-size: 12px;
+}
+.peer-dot i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* ---------- 반응형 ----------
+ *
+ * 좁은 화면에서 사이드바가 232px 고정이면 375px 기기에서 화면의 62%를 먹는다.
+ * 본문이 143px로 눌려 글자가 한 자씩 줄바꿈되고 표는 화면 밖으로 넘친다.
+ *
+ * 햄버거 메뉴 대신 상단 가로 스크롤 내비를 쓰는 이유: 토글 상태를 JS로 관리하면
+ * 라우팅마다 닫아주는 처리가 필요하고, 열린 상태로 페이지를 떠나는 버그가 생긴다.
+ * 항목이 6개뿐이라 가로 스크롤로 충분하다.
+ */
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 10px;
+    overflow: hidden;
+    /* 항목이 눌려 글자가 겹치지 않게 한다 */
+    white-space: nowrap;
+  }
+  .sidebar-primary { display: flex; align-items: center; overflow-x: auto; min-width: 0; }
+  .sidebar-primary > * { flex: 0 0 auto; }
+  .nav-links { flex-direction: row; }
+  .sidebar-chat-heading { display: flex; align-items: center; gap: 10px; padding-top: 6px; margin-top: 0; }
+  .history-toggle { display: flex; align-items: center; gap: 20px; flex: 1; border: 0; background: transparent; padding: 5px 8px; text-align: left; }
+  .sidebar-new { width: auto; padding: 5px 12px; }
+  .sidebar-history { display: none; flex: 0 1 auto; min-height: 0; max-height: 32dvh; }
+  .sidebar-history.open { display: flex; }
+  .sidebar-history h2 { display: none; }
+  .brand { padding: 0 10px 0 0; font-size: 15px; }
+  .brand small { display: none; }         /* 부제는 좁은 화면에서 자리만 차지한다 */
+  .nav-item { padding: 6px 10px; }
+  .nav-spacer { display: none; }
+  /* 조직 ID와 로그아웃은 설정 화면에도 있다. 좁은 화면에서는 내비를 위해 양보한다. */
+  .sidebar > .small.muted { display: none; }
+  .sidebar > button { margin: 0 !important; padding: 6px 10px; }
+
+  .main { padding: 18px 14px 40px; }
+  .main-chat { padding: 16px 14px 10px; }
+  .chat-page .page-sub { font-size: 12px; margin-bottom: 16px; }
+  .chat-welcome h2 { font-size: 21px; }
+
+  /* 표는 잘라내지 말고 가로로 스크롤시킨다.
+     열을 숨기면 사용자가 데이터가 있는지조차 알 수 없다. */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .session-item { width: 100%; }
+
+  /* 필터 줄이 한 줄에 다 들어가지 않으므로 세로로 쌓는다 */
+  .row.wrap > input,
+  .row.wrap > select { width: 100% !important; }
+
+  .login-card { max-width: 100%; }
+}
+
+/* 아주 좁은 화면(360px 이하)에서 카드 3열은 의미가 없다 */
+@media (max-width: 420px) {
+  .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ---------- 접근성 ----------
+ *
+ * 실측 결과 버튼·링크에 포커스 표시가 전혀 없었다(outline: none).
+ * 키보드 사용자는 지금 어디에 있는지 알 수 없다 — 입력 필드에만 표시가 있었다.
+ *
+ * :focus 가 아니라 :focus-visible 을 쓰는 이유: :focus 는 마우스 클릭에도 걸려
+ * 버튼을 누를 때마다 테두리가 남는다. 그러면 개발자가 결국 outline:none 으로
+ * 되돌리게 되고, 키보드 사용자만 손해를 본다.
+ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 입력 요소는 테두리 안쪽에 그려야 레이아웃이 흔들리지 않는다 */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-offset: -1px;
+}
+
+/*
+ * 본문 바로가기.
+ * 내비 항목이 6개라 매 페이지마다 Tab 을 6번 눌러야 본문에 닿는다.
+ * 화면에는 보이지 않다가 포커스를 받으면 나타난다.
+ */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 0 0 8px 0;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 0;
+  text-decoration: none;
+}
+
+/* 스크린리더 전용 텍스트 — 시각적으로 숨기되 읽히게 한다 */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 움직임을 줄이도록 설정한 사용자에게는 전환 효과를 없앤다 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* 실행 승인과 복구: 대화를 가리지 않는 접이식 기록 */
+.execution-panel { margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; min-width: 0; }
+.execution-toggle { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 12px; }
+.execution-records { max-height: 36vh; overflow-y: auto; padding-top: 8px; }
+.execution-run { border-top: 1px solid var(--border); padding: 10px 0; }
+.execution-run summary { cursor: pointer; }
+.execution-action { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 10px 0; }
+.approval-pending { border: 2px solid #857247; }
+.execution-action pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; padding: 10px; background: rgba(127,127,127,.08); border-radius: 6px; font-size: 12px; }
+.execution-path { overflow-wrap: anywhere; }
+.change-preview { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.change-preview h3 { font-size: 12px; margin: 10px 0 0; }
+.approval-controls { margin-top: 12px; }
+.verification-command { display: grid; gap: 5px; margin: 6px 0; }
+.verification-command input { width: 100%; }
+@media (max-width: 600px) { .change-preview { grid-template-columns: minmax(0,1fr); } .execution-records { max-height: 32vh; } .execution-action .row-between { flex-wrap: wrap; gap: 6px; } }

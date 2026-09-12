@@ -1,0 +1,56 @@
+# 설치·빌드·검증 출력은 소스 저장소에 올리지 않는다.
+node_modules/
+dist/
+.turbo/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+*.log
+*.jsonl
+
+# 공개 저장소: 비밀 설정은 예제만 허용한다.
+.env
+.env.*
+!.env.example
+.claude/
+.codex/
+secrets/
+credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# 사용자 데이터·복원본·모델은 T7에만 보관한다.
+backups/
+releases/
+checkpoints/
+workspaces/
+logs/
+outputs/
+tmp/
+temp/
+*.dump
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.parquet
+*.gguf
+*.safetensors
+*.tar.gz
+*.tgz
+*.zip
+*.bak
+
+# macOS/exFAT 메타데이터 및 Python 캐시
+.DS_Store
+._*
+.Spotlight-V100/
+.Trashes/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/

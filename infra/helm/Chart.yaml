@@ -1,0 +1,8 @@
+apiVersion: v2
+name: aios
+description: AIOS — multi-LLM agentic coding platform (API + worker)
+type: application
+# chart version: 차트 자체의 버전. 앱 버전과 분리해야 "차트만 고쳤는데 앱을 롤아웃"하는 사고를 막는다.
+version: 0.1.0
+# appVersion은 배포 시 --set image.tag 로 덮어쓴다. 여기 값은 로컬 개발용 기본값.
+appVersion: "0.1.0"

@@ -1,0 +1,204 @@
+# 비활성 역사적 예제 — 2026-09-12 최초 GitHub 업로드 준비 때 .github/workflows/ci.yml에서 보존.
+# 이 파일은 .github/workflows 밖에 있어 GitHub Actions가 자동 실행하지 않는다.
+# 그대로 활성화하지 말 것: GHCR push, 유료 모델 호출, Kubernetes 배포/rollback을 포함한다.
+# Linux/clean-checkout 실검증과 외부 환경 승인은 받지 않았으며, environment 이름만으로 수동 승인 게이트가 생기지 않는다.
+# 구 pnpm 버전 충돌·T7 단위 fixture·live 하네스 기동/네트워크 전제도 먼저 수정해야 한다.
+# 현재 자동 CI의 범위는 활성 .github/workflows/ci.yml(정적 검사·빌드·머신 독립 단위검사)이다.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: aios, POSTGRES_PASSWORD: aios, POSTGRES_DB: aios }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aios" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+      - name: migrate
+        run: node scripts/migrate.mjs
+        env: { DATABASE_URL: "postgres://aios:aios@localhost:5432/aios" }
+      - run: pnpm test
+        env:
+          DATABASE_URL: "postgres://aios:aios@localhost:5432/aios"
+          REDIS_URL: "redis://localhost:6379"
+
+  # 실기동 검증 하네스. 프로바이더 키가 필요한 Phase는 키가 없으면 스스로 SKIP 하므로
+  # 포크 PR에서도 안전하게 돌아간다. 인프라만 필요한 Phase(2·6·8)는 항상 게이트로 작동.
+  verify-live:
+    needs: verify
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: aios, POSTGRES_PASSWORD: aios, POSTGRES_DB: aios }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aios" --health-interval 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: "postgres://aios:aios@localhost:5432/aios"
+      REDIS_URL: "redis://localhost:6379"
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/migrate.mjs
+      - name: Build sandbox image
+        run: docker build -f infra/sandbox.Dockerfile -t aios-sandbox:latest .
+      - name: Step 2 — Memory stress (100/300/500 turns)
+        run: pnpm --filter @aios/verify s2:memory
+      - name: Phase 4 — Tool engine
+        run: pnpm --filter @aios/verify phase4
+      - name: Phase 6 — Performance
+        run: pnpm --filter @aios/verify phase6
+      - name: Phase 7 — Security
+        run: pnpm --filter @aios/verify phase7
+      - name: Phase 8 — Deployment readiness
+        run: pnpm --filter @aios/verify phase8
+      - name: Provider-dependent steps (skipped without a key)
+        if: env.ANTHROPIC_API_KEY != ''
+        run: |
+          pnpm --filter @aios/verify s2:claude
+          pnpm --filter @aios/verify phase3
+          pnpm --filter @aios/verify s2:scenario
+
+  docker:
+    needs: [verify, verify-live]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile
+          target: api
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile
+          target: worker
+          push: true
+          tags: ghcr.io/${{ github.repository }}/worker:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # 마이그레이션 이미지도 반드시 푸시해야 한다. 빠뜨리면 Helm의 pre-upgrade 훅이
+      # ImagePullBackOff로 멈추고, 배포가 그 자리에서 정지한다.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/Dockerfile
+          target: migrate
+          push: true
+          tags: ghcr.io/${{ github.repository }}/migrate:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: docker
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with: { version: v3.16.1 }
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Deploy (staging)
+        run: |
+          helm upgrade --install aios ./infra/helm -n staging --create-namespace \
+            --set image.repository=ghcr.io/${{ github.repository }} \
+            --set image.tag=${{ github.sha }} \
+            --set ingress.host=staging.aios.example.com \
+            --wait --timeout 10m
+      - name: Smoke test
+        run: |
+          kubectl -n staging rollout status deploy/aios-aios-api --timeout=5m
+          kubectl -n staging run smoke-$GITHUB_RUN_ID --rm -i --restart=Never \
+            --image=curlimages/curl:8.10.1 --command -- \
+            curl -fsS --max-time 10 http://aios-aios-api/readyz
+
+  deploy-prod:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production   # required reviewers 로 수동 승인 게이트
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with: { version: v3.16.1 }
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Canary (new version on a slice of traffic)
+        run: |
+          helm upgrade aios ./infra/helm -n prod \
+            --set image.repository=ghcr.io/${{ github.repository }} \
+            --reuse-values \
+            --set canary.weight=10 --set canary.tag=${{ github.sha }} \
+            --wait --timeout 10m
+      - name: Watch canary for 5 minutes
+        run: |
+          # 카나리 파드의 5xx 비율과 재시작 횟수를 본다. 임계 초과 시 즉시 실패시켜
+          # 아래 promote 단계로 넘어가지 않게 한다.
+          sleep 300
+          RESTARTS=$(kubectl -n prod get pods -l aios.dev/track=canary \
+            -o jsonpath='{range .items[*]}{.status.containerStatuses[0].restartCount}{"\n"}{end}' | sort -rn | head -1)
+          echo "canary restarts: ${RESTARTS:-0}"
+          test "${RESTARTS:-0}" -eq 0
+      - name: Promote to 100%
+        run: |
+          helm upgrade aios ./infra/helm -n prod \
+            --set image.repository=ghcr.io/${{ github.repository }} \
+            --reuse-values \
+            --set image.tag=${{ github.sha }} --set canary.weight=0 \
+            --wait --timeout 10m
+      - name: Rollback on failure
+        if: failure()
+        run: helm rollback aios -n prod --wait --timeout 10m

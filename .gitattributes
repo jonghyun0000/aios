@@ -1,0 +1,11 @@
+# GitHub/Linux에서도 실행 스크립트의 줄바꿈을 보존한다.
+* text=auto
+*.sh text eol=lf
+*.command text eol=lf
+*.mjs text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.woff2 binary

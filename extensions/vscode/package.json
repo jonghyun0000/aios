@@ -1,0 +1,43 @@
+{
+  "name": "aios-vscode",
+  "displayName": "AIOS",
+  "description": "AIOS agent inside VSCode — chat, inline edits, codebase indexing",
+  "version": "0.1.0",
+  "publisher": "aios",
+  "private": true,
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["AI", "Programming Languages"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "aios.ask", "title": "AIOS: Ask about selection" },
+      { "command": "aios.edit", "title": "AIOS: Edit selection" },
+      { "command": "aios.indexWorkspace", "title": "AIOS: Index workspace" }
+    ],
+    "keybindings": [
+      { "command": "aios.ask", "key": "ctrl+shift+a", "mac": "cmd+shift+a", "when": "editorHasSelection" },
+      { "command": "aios.edit", "key": "ctrl+shift+e", "mac": "cmd+shift+e", "when": "editorHasSelection" }
+    ],
+    "configuration": {
+      "title": "AIOS",
+      "properties": {
+        "aios.apiUrl": { "type": "string", "default": "https://api.aios.dev" },
+        "aios.apiKey": { "type": "string", "default": "", "markdownDescription": "API key (`aios_...`). Prefer storing via the `AIOS: Login` flow." },
+        "aios.projectId": { "type": "string", "default": "" }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --external:vscode --outfile=dist/extension.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aios/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.23.0"
+  }
+}

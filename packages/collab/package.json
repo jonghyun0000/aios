@@ -1,0 +1,23 @@
+{
+  "name": "@aios/collab",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "dependencies": {
+    "@aios/shared": "workspace:*",
+    "ioredis": "^5.4.1",
+    "lib0": "^0.2.98",
+    "pg": "^8.12.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.19"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.6"
+  }
+}

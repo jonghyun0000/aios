@@ -1,0 +1,84 @@
+{{- if gt (int .Values.canary.weight) 0 }}
+{{/*
+카나리 Deployment.
+
+동작 원리: 같은 Service의 셀렉터에 걸리도록 라벨을 맞춰 두고, replica 수의 비율로
+트래픽 비중을 만든다. Service는 엔드포인트를 균등 분배하므로
+"카나리 파드 수 / 전체 파드 수" 가 대략의 트래픽 비율이 된다.
+
+왜 nginx canary annotation을 쓰지 않는가:
+  - ingress-nginx의 canary는 Ingress 리소스를 하나 더 만들어 가중치를 정확히 제어한다.
+    그쪽이 정밀하지만, Ingress 컨트롤러 종류에 종속된다.
+  - replica 비율 방식은 어떤 컨트롤러에서도 동작하고, 서비스 메시가 들어오면
+    그때 정밀 제어로 갈아타면 된다. 지금 필요한 것은 "10%만 새 버전"이지
+    "정확히 10.0%"가 아니다.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aios.fullname" . }}-api-canary
+  labels:
+    {{- include "aios.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+    aios.dev/track: canary
+spec:
+  # 전체 목표 replica 중 카나리가 가져갈 몫. 최소 1.
+  replicas: {{ max 1 (div (mul (int .Values.api.autoscaling.maxReplicas) (int .Values.canary.weight)) 100) }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "aios.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+      aios.dev/track: canary
+  template:
+    metadata:
+      labels:
+        {{- include "aios.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+        aios.dev/track: canary
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}/api:{{ .Values.canary.tag | default .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8787
+          env:
+            {{- include "aios.env" . | nindent 12 }}
+            - name: AIOS_TRACK
+              value: canary
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            {{- include "aios.bigdataMount" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "aios.bigdataVolume" . | nindent 8 }}
+{{- end }}

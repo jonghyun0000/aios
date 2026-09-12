@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 최초 공개 업로드는 코드 검증만 한다. 패키지 게시·클라우드 배포 권한을 주지 않는다.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # package.json의 packageManager와 정확히 맞춘다. action의 "9"는 "9.12.0"과 충돌한다.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Build
+        run: pnpm build
+      - name: Portable package and UI unit tests
+        run: pnpm --filter '@aios/*' --filter '!@aios/api' --fail-if-no-match test
+      - name: Portable API unit tests
+        run: >-
+          pnpm --filter @aios/api exec vitest run
+          --exclude 'src/__tests__/checkpoints.test.ts'
+          --exclude 'src/__tests__/local-operations.test.ts'
+      # 위 두 API 파일은 /Volumes/T7의 실제 fixture를 생성하므로 Linux runner에서는 제외한다.
+      # 패키지 이름으로 고른다. 경로 glob은 macOS NFD 한글 경로에서 조용히 0개를 고를 수 있다.
+      # 경로 문자열만 검증하거나 HTTP/DB를 대역으로 쓰는 나머지 API 단위검사는 포함한다.
+      # scripts/local-*.test.mjs도 Mac/T7/로컬 프로세스 전용이다.
+      # DB 마이그레이션·Docker sandbox·Playwright 실기동·Ollama eval·통합 백업/복원은
+      # 이 CI의 PASS 범위가 아니다. 전용 로컬 검증 결과는 docs/20-stage4-local-operations.md를 참조한다.
+      # 이전 자동 배포 예제는 docs/examples/legacy-ci-deploy.yml로 옮겼으며 비활성 상태다.

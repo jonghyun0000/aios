@@ -1,0 +1,25 @@
+.local-operations { margin-top: 32px; min-width: 0; }
+.operations-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.operations-heading h2, .operations-heading p { margin: 0; }
+.operations-heading p { margin-top: 6px; }
+.operations-guide h3, .operations-records h3 { font-size: 15px; margin: 0 0 12px; }
+.operations-guide dl { margin: 0; }
+.operations-guide dl > div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.operations-guide dl > div:last-child { border-bottom: none; }
+.operations-guide dt { font-weight: 600; }
+.operations-guide dd, .operations-facts dd { margin: 0; min-width: 0; }
+.operations-guide dd span { display: block; margin-top: 5px; font-size: 13px; line-height: 1.65; }
+.local-operations code { overflow-wrap: anywhere; white-space: normal; }
+.operations-guide > p { line-height: 1.8; margin-bottom: 0; }
+.operations-records { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+.operations-records > .alert, .operations-records > [role="status"], .operations-caveat { grid-column: 1 / -1; }
+.operations-record-state { font-weight: 600; font-size: 13px; }
+.operations-failed { color: var(--danger); }
+.operations-facts { display: grid; gap: 12px; margin-bottom: 0; font-size: 12px; }
+.operations-facts dt { color: var(--text-muted); margin-bottom: 4px; }
+.operations-caveat { line-height: 1.7; margin: 0; }
+@media (max-width: 560px) {
+  .operations-records { grid-template-columns: minmax(0, 1fr); }
+  .operations-guide dl > div { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .operations-heading { align-items: flex-start; }
+}

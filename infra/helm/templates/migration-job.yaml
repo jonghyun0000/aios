@@ -1,0 +1,59 @@
+{{- if .Values.migration.enabled }}
+{{/*
+마이그레이션 Job — 앱 파드보다 먼저, 정확히 한 번 실행된다.
+
+Helm hook을 쓰는 이유:
+  - 앱 컨테이너에서 마이그레이션을 돌리면 replica 수만큼 동시에 시도해 경합이 난다.
+  - initContainer로 두어도 파드마다 실행되므로 같은 문제.
+  - hook은 릴리스당 한 번 실행되고, 실패하면 업그레이드 자체가 중단된다 —
+    스키마가 반쯤 적용된 채 새 코드가 뜨는 최악의 상태를 막는다.
+
+hook-weight -5: 다른 hook보다 먼저.
+hook-delete-policy: 성공한 Job은 지우되 실패한 Job은 남긴다 — 실패 로그가 없으면 원인을 못 찾는다.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aios.fullname" . }}-migrate-{{ .Values.image.tag | default .Chart.AppVersion | trunc 12 }}
+  labels:
+    {{- include "aios.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "aios.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # runAsUser를 숫자로 명시해야 한다. runAsNonRoot만 두면 kubelet이
+      # 이미지의 USER(node = 비숫자)가 비루트인지 검증하지 못해
+      # CreateContainerConfigError로 파드가 아예 뜨지 않는다(실제 배포에서 확인).
+      # node:20-slim 의 node 유저는 uid 1000.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: {{ include "aios.image" (list . "migrate") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "aios.env" . | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+{{- end }}

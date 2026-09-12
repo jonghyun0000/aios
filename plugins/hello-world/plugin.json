@@ -1,0 +1,12 @@
+{
+  "name": "hello-world",
+  "version": "1.0.0",
+  "displayName": "Hello World",
+  "description": "Example AIOS plugin: registers one tool that fetches GitHub repo stars.",
+  "entry": "index.js",
+  "engines": { "aios": ">=0.1.0" },
+  "permissions": ["tools.register", "net.fetch:api.github.com"],
+  "contributes": {
+    "tools": [{ "name": "gh_stars", "description": "Get star count for a GitHub repo" }]
+  }
+}

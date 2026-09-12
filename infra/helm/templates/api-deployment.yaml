@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aios.fullname" . }}-api
+  labels:
+    {{- include "aios.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxUnavailable 0: 새 파드가 Ready가 되기 전에는 기존 파드를 내리지 않는다.
+      # SSE 스트림이 도중에 끊기면 사용자는 응답이 잘린 것으로 보게 된다.
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "aios.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "aios.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        # 시크릿이 바뀌면 파드를 새로 뜨게 한다. 이게 없으면 키를 교체해도
+        # 기존 파드가 옛 값을 들고 계속 돈다(env는 런타임에 갱신되지 않는다).
+        checksum/secret-name: {{ .Values.secretName | sha256sum }}
+        {{- if .Values.metrics.serviceMonitor.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8787"
+        prometheus.io/path: "/metrics"
+        {{- end }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.api.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          image: {{ include "aios.image" (list . "api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8787
+          env:
+            {{- include "aios.env" . | nindent 12 }}
+          # liveness는 의존성을 확인하지 않는다. DB가 잠깐 흔들렸다고 파드를 재시작하면
+          # 장애가 증폭된다(재시작 폭풍). "프로세스가 살아 있는가"만 묻는다.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # readiness는 DB/Redis 왕복을 확인한다. 실패하면 파드는 살아 있되
+          # 서비스 엔드포인트에서 빠진다 — 이것이 의존성 장애에 대한 올바른 반응이다.
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # startup: 콜드 스타트가 느려도 liveness가 먼저 죽이지 않도록.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: 24 # 최대 2분
+          lifecycle:
+            preStop:
+              # 파드가 Terminating이 되어도 kube-proxy의 엔드포인트 갱신에는 시차가 있다.
+              # 이 sleep 동안 새 요청은 계속 들어올 수 있고, 앱은 아직 정상 처리한다.
+              # sleep이 끝난 뒤에야 SIGTERM이 가서 배수가 시작된다.
+              exec: { command: ["sleep", "5"] }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            # readOnlyRootFilesystem이므로 쓰기 가능한 곳을 명시적으로 준다
+            - { name: tmp, mountPath: /tmp }
+            {{- include "aios.bigdataMount" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- include "aios.bigdataVolume" . | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if .Values.affinity }}
+        {{- toYaml .Values.affinity | nindent 8 }}
+        {{- else }}
+        # 같은 노드에 API 파드를 몰아넣지 않는다 — 노드 하나가 죽으면 전부 죽는다.
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: {{ include "aios.name" . }}
+                    app.kubernetes.io/component: api
+        {{- end }}

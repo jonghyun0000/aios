@@ -1,0 +1,21 @@
+{
+  "name": "@aios/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "aios": "src/index.ts" },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "node ../../scripts/build-node-app.mjs src/index.ts",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aios/sdk": "workspace:*",
+    "@aios/shared": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2"
+  }
+}
