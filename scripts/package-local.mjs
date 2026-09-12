@@ -31,7 +31,7 @@ const TREES = [
   "infra", "scripts", "docs", "tools/bigdata", ".github/workflows",
 ];
 const PROJECTS = [...APPS.map(name => `apps/${name}`), ...PACKAGES.map(name => `packages/${name}`), "extensions/vscode"];
-const CONFIGS = ["package.json", "tsconfig.json", "vitest.config.ts", "vite.config.ts", "playwright.config.ts", "index.html"];
+const CONFIGS = ["package.json", "tsconfig.json", "vitest.config.ts", "vite.config.ts", "playwright.config.ts", "a11y.config.ts", "index.html"];
 const CONFIG_PATHS = new Set(PROJECTS.flatMap(project => CONFIGS.map(name => `${project}/${name}`)));
 const BLOCKED = new Set(["node_modules", "dist", ".git", ".turbo", ".cache", "cache", "__pycache__", ".pytest_cache", ".venv", "venv", "env", "secrets", "backups", "backup", "logs", "coverage", "test-results", "playwright-report", "blob-report", "outputs", "tmp", "temp", "work", "models", "databases", ".ds_store"]);
 const EXT = /\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc|yaml|yml|toml|html|css|scss|svg|png|jpg|jpeg|webp|woff2?|md|sh|sql|tpl|py|snap)$/i;

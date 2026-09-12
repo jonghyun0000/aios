@@ -29,22 +29,22 @@ export function CollabPage({ docName }: { docName: string | null }) {
         <p className="page-sub">
           문서 이름을 정하면 그 이름을 아는 같은 조직 구성원과 실시간으로 함께 편집합니다.
         </p>
-        <div className="card">
+        <form className="card" onSubmit={(event) => { event.preventDefault(); if (draft.trim()) navigate(`/collab/${encodeURIComponent(draft.trim())}`); }}>
           <div className="field">
             <label htmlFor="doc">문서 이름</label>
             <input id="doc" value={draft} onChange={(e) => setDraft(e.target.value)} className="mono" />
           </div>
           <button
             className="primary"
+            type="submit"
             disabled={!draft.trim()}
-            onClick={() => navigate(`/collab/${encodeURIComponent(draft.trim())}`)}
           >
             문서 열기
           </button>
           <p className="small muted" style={{ marginBottom: 0, marginTop: 12 }}>
             문서는 조직 단위로 격리됩니다. 다른 조직이 같은 이름을 써도 서로 보이지 않습니다.
           </p>
-        </div>
+        </form>
       </div>
     );
   }
@@ -138,7 +138,7 @@ function CollabEditor({ docName }: { docName: string }) {
         <div>
           <h1 className="mono">{docName}</h1>
           <p className="page-sub">
-            변경은 즉시 저장되고 모든 참여자에게 전파됩니다.
+            연결 중에는 편집을 참여자에게 전파합니다. 서버 저장은 지연될 수 있으므로 연결 상태를 확인하세요.
           </p>
         </div>
         {/* 연결이 끊겼는지 낭독되지 않으면 편집이 사라지는 줄 모른다 */}
@@ -165,11 +165,13 @@ function CollabEditor({ docName }: { docName: string }) {
 
       {status === "disconnected" && (
         <div className="alert" role="alert">
-          서버와 연결이 끊겼습니다. 재연결될 때까지의 편집은 로컬에 보관되었다가 자동으로 병합됩니다.
+          서버와 연결이 끊겼습니다. 편집은 이 탭의 메모리에만 남습니다. 재연결되면 병합하지만, 그 전에 새로고침하거나 탭을 닫으면 잃을 수 있습니다. 필요한 내용은 복사해 보관하세요.
         </div>
       )}
 
       <textarea
+        aria-label={`${docName} 협업 문서 내용`}
+        aria-describedby="collab-editor-help"
         ref={textareaRef}
         className="editor card"
         value={value}
@@ -179,7 +181,7 @@ function CollabEditor({ docName }: { docName: string }) {
         spellCheck={false}
         placeholder="여기에 입력하세요…"
       />
-      <p className="small muted">
+      <p className="small muted" id="collab-editor-help">
         {value.length.toLocaleString()}자 · 참여자 {others.length + 1}명
       </p>
     </div>

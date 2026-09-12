@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, writeFile, lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { copyTree, hash, inventory, noLinks, safeRelative, signManifest, validateEntries, verifyBundle, checkpointIntegrity, assertQuiescent } from "./local-backup.mjs";
+import { copyTree, hash, inventory, noLinks, safeRelative, signManifest, validateEntries, verifyBundle, checkpointIntegrity, assertQuiescent, assertNoWorkspaceApi } from "./local-backup.mjs";
 
 const BASE = "/Volumes/T7/bigdata/test-artifacts/stage4-backup";
 await mkdir(BASE, { recursive: true });
@@ -99,11 +99,28 @@ test("fresh install permits missing checkpoint folder only without database refe
 
 test("active/stale startup lock and failed flush record block consistency claims", async () => {
   const root = await temp(); await writeFile(join(root, "port-8791.lock"), "untrusted stale lock");
+  const workspace = join(root, "workspaces/fixture"); await mkdir(workspace, { recursive: true });
   const client = { query: async () => ({ rows: [{ n: 0 }] }) };
-  await assert.rejects(assertQuiescent(client, root), /실행 중/);
+  await assert.rejects(assertQuiescent(client, root, workspace), /실행 중/);
   const root2 = await temp(); await mkdir(join(root2, "runtime"));
   await writeFile(join(root2, "runtime/runtime.json"), JSON.stringify({ state: "failed" }));
-  await assert.rejects(assertQuiescent(client, root2), /정상 종료/);
+  await assert.rejects(assertQuiescent(client, root2, workspace), /정상 종료/);
+});
+
+test("workspace API 잠금은 임의 포트·다른 DB도 차단하며 깨진 표식을 보존한다", async () => {
+  const root = await temp(); const workspace = join(root, "workspaces/fixture"); await mkdir(workspace, { recursive: true });
+  await assertNoWorkspaceApi(workspace);
+  const locks = join(root, "run/local-api"); await mkdir(locks, { recursive: true });
+  const path = join(locks, `${hash(workspace.normalize("NFC"))}.lock`); await writeFile(path, "broken owner");
+  await assert.rejects(assertNoWorkspaceApi(workspace), /API 소유권/);
+  assert.equal(await readFile(path, "utf8"), "broken owner");
+});
+
+test("API 회수 중단 표식만 남아도 오프라인 백업이라고 주장하지 않는다", async () => {
+  const root = await temp(); const workspace = join(root, "workspaces/fixture"); await mkdir(workspace, { recursive: true });
+  const path = join(root, "run/local-api", `${hash(workspace.normalize("NFC"))}.lock.recovery`); await mkdir(path, { recursive: true });
+  await assert.rejects(assertNoWorkspaceApi(workspace), /API 소유권/);
+  assert.equal((await lstat(path)).isDirectory(), true);
 });
 
 test("existing system symlink is rejected without following it", async t => {

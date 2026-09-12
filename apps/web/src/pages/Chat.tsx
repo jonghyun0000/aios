@@ -7,6 +7,7 @@ import { AsyncBoundary } from "../components/Async.js";
 import { useRouter } from "../lib/router.js";
 import { useSessions } from "../lib/sessions.js";
 import { shouldSendOnEnter } from "../lib/chat-input.js";
+import { presentWorkspaceContext, type WorkspacePresentation } from "../lib/workspace-context.js";
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { ExecutionPanel } from "../components/ExecutionPanel.js";
 import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/types.js";
@@ -61,6 +62,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const activeSessionRef = useRef<string | null>(null);
   const [sending, setSending] = useState(false);
   const [toolsEnabled, setToolsEnabled] = useState(false);
+  const [useMemory, setUseMemory] = useState(true);
   const [verificationCommand, setVerificationCommand] = useState("");
   const [executionRevision, setExecutionRevision] = useState(0);
   const [mode, setMode] = useState<ChatMode>("auto");
@@ -69,7 +71,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const [contextNotice, setContextNotice] = useState("");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceStarting, setWorkspaceStarting] = useState(false);
-  const [workspaceNotice, setWorkspaceNotice] = useState("");
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspacePresentation | null>(null);
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const followScrollRef = useRef(true);
@@ -98,7 +100,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   useEffect(() => () => { abortRef.current?.abort(); setBusy(false); }, [setBusy]);
   useEffect(() => {
     followScrollRef.current = true;
-    if (!sendingRef.current) { setStrategy(null); setTimings({}); setContextNotice(""); setWorkspaceNotice(""); }
+    if (!sendingRef.current) { setStrategy(null); setTimings({}); setContextNotice(""); setWorkspaceContext(null); }
     if (activeSessionRef.current && activeSessionRef.current !== sessionId) abortRef.current?.abort();
   }, [sessionId]);
   useEffect(() => {
@@ -130,7 +132,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
     setLastAnnouncement("");
     setLive({ ...EMPTY_TURN });
     setStrategy(null); setTimings({}); setContextNotice("");
-    setWorkspaceNotice("");
+    setWorkspaceContext(null);
     const controller = new AbortController();
     abortRef.current = controller;
     activeSessionRef.current = sessionId;
@@ -139,7 +141,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       if (controller.signal.aborted) return;
       if (e.type === "execution_update") { setExecutionRevision((old) => old + 1); return; }
       if (e.type === "incomplete") { setContextNotice(e.reason); return; }
-      if (e.type === "workspace_context") { setWorkspaceNotice(`저장된 대화 ${e.historyCount}개 불러옴${e.historyCount === 100 ? " (최근 100개 한도)" : ""}${e.files.length ? ` · 참고 파일 ${e.files.length}개${e.excerpted ? " (관련 구간 발췌)" : ""}` : ""}`); return; }
+      if (e.type === "workspace_context") { setWorkspaceContext(presentWorkspaceContext(e)); return; }
       if (e.type === "strategy") { setStrategy({ path: e.path, reason: e.reason }); return; }
       if (e.type === "timing") { setTimings((old) => ({ ...old, [e.phase]: (old[e.phase] ?? 0) + e.durationMs })); return; }
       if (e.type === "context_trimmed") { setContextNotice("입력 한도로 오래된 대화·참고자료 일부를 제외했습니다. 필요한 내용은 다시 알려주세요."); return; }
@@ -175,7 +177,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       controller.signal.throwIfAborted();
       setInput("");
       setPendingMessage(content);
-      await streamChat({ sessionId: target, content, toolsEnabled, verificationCommand, mode, signal: controller.signal, onEvent: apply });
+      await streamChat({ sessionId: target, content, toolsEnabled, verificationCommand, mode, useMemory, signal: controller.signal, onEvent: apply });
     } catch (err) {
       if (controller.signal.aborted) return; // 사용자가 중단한 것은 에러가 아니다
       const detail = err instanceof Error ? err.message : String(err);
@@ -204,7 +206,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       setBusy(false);
       setExecutionRevision((old) => old + 1);
     }
-  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, mode]);
+  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, mode, useMemory]);
 
   /*
    * 스크린리더에 알릴 상태 문구.
@@ -250,7 +252,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
               <p className="muted">메시지를 보내면 새 대화가 시작됩니다.<br />이전 대화는 대화 내역에서 이어갈 수 있습니다.</p></div>
             </div>
           ) : (
-            <div className="messages" ref={scrollRef} onScroll={() => {
+            <div className="messages" role="region" aria-label="대화 메시지" tabIndex={0} ref={scrollRef} onScroll={() => {
               const el = scrollRef.current;
               if (el) followScrollRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
             }}>
@@ -342,10 +344,25 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
             <input aria-label="검증 명령" value={verificationCommand} maxLength={4000} disabled={sending} placeholder="예: node --test test.js" onChange={(e) => setVerificationCommand(e.target.value)} />
             <span className="muted">파일 수정·명령 실행은 건별 승인이 필요합니다. 검증 명령이 없으면 동작 미검증으로 표시합니다.</span>
           </label>}
-          <div className="small muted mode-hint">{mode === "auto" ? "질문에 따라 빠른 응답·정확 계산·깊이 생각을 선택합니다. 직접 모드를 바꿀 수도 있습니다." : mode === "fast" ? "현재 대화는 기억하고 장기기억 검색은 생략합니다. 계산·복잡한 코드는 ‘자동 선택’을 권장합니다." : "긴 추론과 대화 간 장기기억을 사용합니다. 응답 시간이 더 걸릴 수 있습니다."}</div>
+          <div className="small muted mode-hint">{mode === "auto" ? "질문에 따라 빠른 응답·정확 계산·깊이 생각을 선택합니다. 직접 모드를 바꿀 수도 있습니다." : mode === "fast" ? "장기기억 검색을 생략합니다. 계산·복잡한 코드는 ‘자동 선택’을 권장합니다." : "긴 추론을 사용하며 기억이 켜져 있으면 장기기억도 검색합니다. 응답 시간이 더 걸릴 수 있습니다."}</div>
+          <details className="small context-controls">
+            <summary>기억·참고자료 사용 범위</summary>
+            <label className="memory-option"><input type="checkbox" checked={useMemory} disabled={sending} onChange={(e) => setUseMemory(e.target.checked)} />이전 대화와 답변 선호 사용</label>
+            <p className="muted">끄면 다음 요청부터 이전 대화·답변 선호를 불러오지 않습니다. 채팅 저장을 끄거나 기존 대화를 삭제하는 기능은 아닙니다. 다시 켜면 기억을 사용합니다.</p>
+            <p className="muted">이 대화의 최근 본문 최대 100개와 사용자 요청 최대 500개에서 언어·형식·길이 선호를 확인합니다. 입력 한도로 일부가 제외될 수 있으며, 이번에 명시한 요청이 우선입니다.</p>
+            <button disabled={sending || workspaceStarting || !!input.trim()} onClick={() => {
+              setInput("이 대화의 답변 선호를 초기화해줘.");
+              textareaRef.current?.focus();
+            }}>답변 선호 초기화 문장 넣기</button>
+            <p className="muted">빈 입력란에 문장만 넣습니다. 이 문장을 단독으로 전송하면 답변 선호를 초기화하며 기존 대화는 보존합니다. 초안이 있다면 먼저 전송하거나 별도로 보관한 뒤 입력란을 비워주세요.</p>
+          </details>
           {strategy && <div className="small mode-hint" data-testid="chat-strategy">{PATH_LABEL[strategy.path]} · {strategy.reason}</div>}
           {contextNotice && <div className="small mode-hint" role="status">{contextNotice}</div>}
-          {workspaceNotice && <div className="small muted mode-hint" data-testid="workspace-context">{workspaceNotice}</div>}
+          {workspaceContext && <div className="small mode-hint workspace-context" data-testid="workspace-context">
+            <div className="muted">{workspaceContext.summary}</div>
+            {workspaceContext.memoryNotice && <div data-testid="workspace-memory">{workspaceContext.memoryNotice}</div>}
+            {workspaceContext.sources.length > 0 && <details data-testid="workspace-sources"><summary>답변에 전달된 참고 구간 {workspaceContext.sources.length}개</summary><ul>{workspaceContext.sources.map((source) => <li key={source.id}>{source.label}</li>)}</ul><div className="muted">전달한 범위이며, 답변의 정확성이나 자료 전체 검증을 보장하지 않습니다.</div></details>}
+          </div>}
           {Object.keys(timings).length > 0 && <details className="small muted mode-hint" data-testid="chat-timings">
             <summary>이번 응답 시간{timings.total !== undefined ? ` · ${(timings.total / 1000).toFixed(2)}초` : ""}</summary>
             <div>{Object.entries(timings).map(([phase, ms]) => <span key={phase} style={{ display: "inline-block", marginRight: 14 }}>{PHASE_LABEL[phase as TimingPhase]} {(ms / 1000).toFixed(2)}초</span>)}</div>

@@ -26,7 +26,7 @@ export function SessionActions({ session, onClose }: { session: SessionRow; onCl
     {error && <div role="alert" className="alert">{error}</div>}
     {session.deleted_at ? <><p>휴지통에 있는 대화입니다. 메시지는 그대로 보관되어 있습니다.</p><button className="primary" disabled={busy} onClick={() => void change({ deleted: false })}>대화 복구</button></> : <>
       <form onSubmit={(e) => { e.preventDefault(); void change({ title: title.trim() }); }}>
-        <label>대화 이름<input autoFocus aria-label="대화 이름" value={title} maxLength={200} disabled={busy} onChange={(e) => setTitle(e.target.value)} /></label>
+        <label>대화 이름<input data-modal-initial-focus aria-label="대화 이름" value={title} maxLength={200} disabled={busy} onChange={(e) => setTitle(e.target.value)} /></label>
         <button className="primary" disabled={busy || !title.trim()}>이름 저장</button>
       </form>
       <hr />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "./lib/auth.js";
 import { SessionProvider, useSessions } from "./lib/sessions.js";
 import { Link, matchRoute, useRouter } from "./lib/router.js";
@@ -31,6 +31,8 @@ function Sidebar() {
   const sessions = useSessions();
   const [editing, setEditing] = useState<SessionRow | null>(null);
   const [historyOpen, setHistoryOpen] = useState(() => window.matchMedia("(min-width: 761px)").matches);
+  const historyToggle = useRef<HTMLButtonElement>(null);
+  const closeHistory = () => { setHistoryOpen(false); queueMicrotask(() => historyToggle.current?.focus()); };
   const isActive = (to: string) => (to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`));
 
   return (
@@ -54,18 +56,20 @@ function Sidebar() {
       ))}</div>
       </div>
       <div className="sidebar-chat-heading">
-        <button className="history-toggle" aria-expanded={historyOpen} aria-controls="sidebar-conversations" onClick={() => setHistoryOpen((open) => !open)}>
+        <button ref={historyToggle} className="history-toggle" aria-expanded={historyOpen} aria-controls="sidebar-conversations" onClick={() => setHistoryOpen((open) => !open)}>
           대화 내역 <span aria-hidden>{historyOpen ? "⌃" : "⌄"}</span>
         </button>
         <button className="sidebar-new" disabled={sessions.busy} onClick={sessions.newChat}>+ 새 대화</button>
       </div>
-      <section className={`sidebar-history${historyOpen ? " open" : ""}`} id="sidebar-conversations" aria-label="대화 목록">
+      <section className={`sidebar-history${historyOpen ? " open" : ""}`} id="sidebar-conversations" aria-label="대화 목록" onKeyDown={(event) => {
+        if (event.key === "Escape" && historyOpen && window.matchMedia("(max-width: 760px)").matches) { event.preventDefault(); closeHistory(); }
+      }}>
         <h2>{sessions.trash ? "휴지통" : "최근 대화"}</h2>
         <div className="history-controls"><input type="search" aria-label="대화 검색" placeholder="제목·본문 검색" maxLength={200} value={sessions.search} onChange={(e) => sessions.setSearch(e.target.value)} />
           <button aria-pressed={sessions.trash} onClick={() => sessions.setTrash(!sessions.trash)}>{sessions.trash ? "최근 대화 보기" : "휴지통"}</button></div>
         {sessions.search && <div className="sr-only" role="status" aria-live="polite">{sessions.loading ? "대화를 검색하는 중" : `검색 결과 ${sessions.rows.length}개${sessions.hasMore ? " 이상" : ""}`}</div>}
         <div className="session-list" onClick={(event) => {
-          if (event.target instanceof Element && event.target.closest("a") && window.matchMedia("(max-width: 760px)").matches) setHistoryOpen(false);
+          if (event.target instanceof Element && event.target.closest("a") && window.matchMedia("(max-width: 760px)").matches) closeHistory();
         }}>
           {sessions.rows.map((session) => (
             <div className="session-row" key={session.id}>

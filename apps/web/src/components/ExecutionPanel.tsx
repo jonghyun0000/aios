@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { Modal } from "./Modal.js";
 
@@ -20,6 +20,8 @@ export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: st
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [restore, setRestore] = useState<Action | null>(null);
+  const recordsId = useId();
+  const toggle = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     let live = true;
     const controller = new AbortController();
@@ -39,21 +41,23 @@ export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: st
   const pending = runs.some((run) => run.actions.some((action) => action.status === "pending"));
   const act = async (action: Action, operation: "approval" | "restore", approve = false) => {
     if (busy) return;
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true); setError(""); setNotice(""); setOpen(true);
     try {
       const result = await api<{ removedNewFile?: boolean }>(`/v1/sessions/${sessionId}/executions/${action.id}/${operation}`, { method: "POST", body: JSON.stringify(operation === "approval" ? { approve } : { confirm: true }), signal: AbortSignal.timeout(15000) });
       setNotice(operation === "restore" ? result.removedNewFile ? "이번 작업이 만든 새 파일을 제거했습니다. 변경 전·후 내용은 실행 기록에 보관됩니다." : "변경 전 내용으로 복구했습니다." : approve ? "이번 작업 1건을 승인했습니다." : "작업을 거절했습니다.");
       setRestore(null);
+      if (operation === "approval") toggle.current?.focus({ preventScroll: true });
     } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     finally { setBusy(false); setRefresh((value) => value + 1); }
   };
   return <section className="execution-panel" aria-label="실행 안전 기록">
-    <button className="execution-toggle" aria-expanded={open || pending} onClick={() => setOpen(!open)}>
+    <h2 className="sr-only">실행 안전 기록</h2>
+    <button ref={toggle} className="execution-toggle" aria-controls={open || pending ? recordsId : undefined} aria-expanded={open || pending} onClick={() => setOpen(!open)}>
       {pending ? "승인 대기 — 실행 내용을 확인해 주세요" : `실행 기록${runs[0] ? ` · ${label[runs[0].status] ?? runs[0].status}` : ""}`} <span aria-hidden>{open || pending ? "▴" : "▾"}</span>
     </button>
     {(error || loadError) && <div className="alert small" role="alert">{error || loadError}<button onClick={() => setRefresh((value) => value + 1)}>다시 확인</button></div>}
     {notice && <div className="small" role="status">{notice}</div>}
-    {(open || pending) && <div className="execution-records">
+    {(open || pending) && <div className="execution-records" id={recordsId} role="region" aria-label="승인과 실행 결과" tabIndex={0}>
       <p className="small muted">검증 결과는 실행 당시의 상태입니다. 이후 변경하면 다시 검증하세요. 명령은 네트워크 차단·작업 폴더 읽기 전용입니다. 최근 20회 기록을 표시합니다.</p>
       {!runs.length && <p className="small muted">도구를 사용하면 승인 요청과 실행 결과가 여기에 남습니다.</p>}
       {runs.map((run, index) => <details key={run.id} open={index === 0} className="execution-run">
@@ -63,9 +67,9 @@ export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: st
         {run.actions.map((action) => <article key={action.id} className={`execution-action ${action.status === "pending" ? "approval-pending" : ""}`}>
           <div className="row-between"><strong>{action.purpose === "verification" ? "지정 검증 명령" : action.tool_name}</strong><span className="badge">{label[action.status] ?? action.status}</span></div>
           {action.arguments.path && <p className="execution-path">파일: {action.arguments.path}</p>}
-          {action.arguments.command && <><pre>{action.arguments.command}</pre><p className="small muted">위치: {action.arguments.cwd ?? "."} · 작업 폴더 읽기 전용 · 네트워크 없음</p></>}
+          {action.arguments.command && <><pre role="region" aria-label="실행할 명령" tabIndex={0}>{action.arguments.command}</pre><p className="small muted">위치: {action.arguments.cwd ?? "."} · 작업 폴더 읽기 전용 · 네트워크 없음</p></>}
           {action.preview && <details open={action.status === "pending"}><summary>변경 전·후 전체 내용{action.preview.before === null ? " · 새 파일" : ""}</summary>
-            <div className="change-preview"><div><h3>변경 전</h3><pre>{action.preview.before ?? "(파일 없음)"}</pre></div><div><h3>변경 후</h3><pre>{action.preview.after || "(빈 파일)"}</pre></div></div>
+            <div className="change-preview"><div><h3>변경 전</h3><pre role="region" aria-label="변경 전 전체 내용" tabIndex={0}>{action.preview.before ?? "(파일 없음)"}</pre></div><div><h3>변경 후</h3><pre role="region" aria-label="변경 후 전체 내용" tabIndex={0}>{action.preview.after || "(빈 파일)"}</pre></div></div>
             <p className="small muted execution-path">저장 후 SHA-256: {action.after_hash}</p>
           </details>}
           {action.status === "pending" && <div className="approval-controls" role="group" aria-label="위험 작업 승인">
@@ -73,7 +77,7 @@ export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: st
             <button className="primary" disabled={busy} onClick={() => void act(action, "approval", true)}>이번 작업 승인</button>{" "}<button disabled={busy} onClick={() => void act(action, "approval", false)}>거절하고 중단</button>
           </div>}
           {action.exit_code !== null && <p className="small">실제 종료 코드: <strong>{action.exit_code}</strong></p>}
-          {action.output && <details><summary>실행 결과 보기</summary><pre>{action.output}</pre></details>}
+          {action.output && <details><summary>실행 결과 보기</summary><pre role="region" aria-label="명령 실행 결과 전체 내용" tabIndex={0}>{action.output}</pre></details>}
           {action.checkpoint && action.decided_at && !action.restored_at && !["pending", "approved", "running", "rejected", "expired"].includes(action.status) && <button disabled={busy || sending} onClick={() => setRestore(action)}>이 변경 복구</button>}
         </article>)}
       </details>)}

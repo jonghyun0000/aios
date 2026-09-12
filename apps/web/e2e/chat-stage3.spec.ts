@@ -16,7 +16,7 @@ test("승인 전 변경 내용·단일 승인·복구 충돌을 표시한다", a
     await route.fulfill({ json: { ok: true } });
   });
   await page.getByRole("button", { name: "이번 작업 승인", exact: true }).click();
-  await page.getByRole("button", { name: /실행 기록/ }).click();
+  await expect(page.getByRole("button", { name: /실행 기록/ })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("execution-summary")).toContainText("동작 미검증");
   await page.route("**/executions/*/restore", (route) => route.fulfill({ status: 409, json: { error: { code: "file_conflict", message: "파일이 이후 변경됐습니다. 현재 내용을 보존합니다." } } }));
   await page.getByRole("button", { name: "이 변경 복구", exact: true }).click();

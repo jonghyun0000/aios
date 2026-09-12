@@ -1,5 +1,6 @@
 import { ApiError, apiKeyStore } from "./api.js";
 import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/types.js";
+import type { WorkspaceContext } from "./workspace-context.js";
 
 /**
  * SSE 스트리밍 채팅.
@@ -16,7 +17,7 @@ import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/type
 export type ChatEvent =
   | { type: "execution_update"; runId: string }
   | { type: "incomplete"; reason: string; attempt: number }
-  | { type: "workspace_context"; historyCount: number; files: string[]; excerpted: boolean }
+  | ({ type: "workspace_context" } & WorkspaceContext)
   | { type: "timing"; phase: TimingPhase; durationMs: number }
   | { type: "strategy"; mode: ChatMode; path: "fast" | "thorough" | "calculator"; reason: string }
   | { type: "context_trimmed"; sections: { section: string; count: number }[] }
@@ -37,6 +38,7 @@ export interface SendOptions {
   toolsEnabled?: boolean;
   verificationCommand?: string;
   mode?: ChatMode;
+  useMemory?: boolean;
   signal?: AbortSignal;
   onEvent(event: ChatEvent): void;
 }
@@ -56,7 +58,7 @@ export async function streamChat(opts: SendOptions): Promise<void> {
       mode: opts.mode ?? "auto",
       tools: { enabled: opts.toolsEnabled ?? false },
       verificationCommand: opts.toolsEnabled ? opts.verificationCommand?.trim() || undefined : undefined,
-      context: { useMemory: true },
+      context: { useMemory: opts.useMemory !== false },
     }),
     signal: opts.signal,
   });

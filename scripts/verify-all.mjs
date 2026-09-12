@@ -10,14 +10,21 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sourceInventory, sourceHash } from "./package-local.mjs";
+import { selectVerificationSteps, summarizeVerification, verificationInputs } from "./verification-policy.mjs";
+import { prepareReportDirectory, writeVerificationReport } from "./verification-report.mjs";
+import { PORTABLE_EXCLUSIONS, runStructuredVitest } from "./verify-vitest.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const STEPS = [
   { id: "typecheck", label: "Type check", cmd: "pnpm", args: ["-r", "--no-bail", "exec", "tsc", "--noEmit"] },
   { id: "lint", label: "Lint", cmd: "pnpm", args: ["exec", "eslint", ".", "--max-warnings=0"] },
-  { id: "unit", label: "Unit tests", cmd: "pnpm", args: ["-r", "--no-bail", "exec", "vitest", "run", "--passWithNoTests"] },
-  { id: "local-ops", label: "Local operations fault injection", cmd: "node", args: ["--test", "scripts/local-backup.test.mjs", "scripts/local-lifecycle.test.mjs", "scripts/package-local.test.mjs"] },
+  { id: "unit", label: "Portable unit tests (explicit local exclusions)", vitest: true },
+  { id: "local-ops", label: "Local operations fault injection", cmd: "node", args: ["--test", "scripts/local-backup.test.mjs", "scripts/local-lifecycle.test.mjs", "scripts/package-local.test.mjs", "scripts/local-api-backup.test.mjs", "scripts/doctor.test.mjs", "scripts/verification-policy.test.mjs", "scripts/verification-report.test.mjs", "scripts/verify-vitest.test.mjs", "scripts/verify-app-a11y.test.mjs", "scripts/public-demo-policy.test.mjs"] },
+  { id: "durability-local", label: "Isolated DB execution durability", vitest: true, needsDurability: true },
+  { id: "index-local", label: "Actual T7 index boundary fixture", vitest: true, needsIndex: true },
+  { id: "context-live", label: "Actual API DB and model context", cmd: "pnpm", args: ["--filter", "@aios/verify", "exec", "tsx", "src/eval/context-persistence.ts"], needsContext: true },
   { id: "build", label: "Build", cmd: "pnpm", args: ["build"] },
   { id: "s2-claude", label: "Claude live", cmd: "pnpm", args: ["--filter", "@aios/verify", "s2:claude"], needsKey: "anthropic" },
   // 누수 측정은 강제 GC가 있어야 성립한다. NODE_OPTIONS로 주는 이유: tsx가 자식 프로세스를
@@ -54,7 +61,24 @@ const STEPS = [
   { id: "phase8", label: "Production", cmd: "pnpm", args: ["--filter", "@aios/verify", "phase8"] },
 ];
 
-const only = process.argv.slice(2);
+let selection;
+try { selection = selectVerificationSteps(process.argv.slice(2), STEPS); }
+catch (error) { console.error(error.message); process.exit(2); }
+if (selection.action !== "run") {
+  console.log("사용: pnpm verify [단계...] [--report]. 기본은 typecheck lint unit build입니다.");
+  console.log("unit은 명시된 portable 범위만 검사합니다. T7/DB opt-in 제외는 전체 통과에 포함되지 않습니다.");
+  for (const item of PORTABLE_EXCLUSIONS) console.log(`unit 제외: @aios/api/${item.file} — ${item.reason}`);
+  console.log("--legacy-full은 구형 전체 시험이며 --allow-destructive-phase8과 격리 환경 확인이 필요합니다.");
+  for (const step of STEPS) console.log(`${step.id}: ${step.label}${step.id === "phase8" ? " [파괴적: DB/컨테이너 정리]" : ""}`);
+  process.exit(0);
+}
+const startedAt = new Date().toISOString();
+const reportDirectory = "/Volumes/T7/bigdata/verification-reports";
+if (selection.report) {
+  if (!existsSync("/Volumes/T7")) throw new Error("--report 산출물은 연결된 T7에만 저장합니다.");
+  await prepareReportDirectory(reportDirectory); // 긴 검사 전 쓰기 경로를 확인한다.
+}
+const beforeHash = sourceHash(verificationInputs(await sourceInventory(repo)));
 /*
  * 프로바이더 가용성.
  *
@@ -112,8 +136,22 @@ function run(step) {
 }
 
 const results = [];
-for (const step of STEPS) {
-  if (only.length && !only.includes(step.id)) continue;
+for (const step of selection.steps) {
+  if (step.needsIndex && process.env.AIOS_INDEX_FS_TEST !== "1") {
+    console.log(`BLOCKED ${step.label} — AIOS_INDEX_FS_TEST=1로 실제 T7 fixture 시험을 명시해야 합니다.`);
+    results.push({ ...step, status: "BLOCKED", blockReason: "실제 색인 fixture 사전조건 없음" });
+    continue;
+  }
+  if (step.needsContext && (process.env.AIOS_CONTEXT_PERSISTENCE_TEST !== "1" || !process.env.DATABASE_URL || !process.env.REDIS_URL)) {
+    console.log(`BLOCKED ${step.label} — AIOS_CONTEXT_PERSISTENCE_TEST=1과 로컬 DATABASE_URL/REDIS_URL이 필요합니다. 새 합성 대화만 생성합니다.`);
+    results.push({ ...step, status: "BLOCKED", blockReason: "실제 맥락 시험 사전조건 없음" });
+    continue;
+  }
+  if (step.needsDurability && (process.env.AIOS_DURABILITY_TEST !== "1" || !process.env.DATABASE_URL)) {
+    console.log(`BLOCKED ${step.label} — AIOS_DURABILITY_TEST=1과 로컬 DATABASE_URL(CREATEDB 권한)이 필요합니다. 운영 DB는 변경하지 않습니다.`);
+    results.push({ ...step, status: "BLOCKED", blockReason: "격리 DB 시험 사전조건 없음" });
+    continue;
+  }
   if (step.needsKey && !hasProviderFor(step.needsKey)) {
     const why = typeof step.needsKey === "string"
       ? `${step.needsKey.toUpperCase()}_API_KEY 가 없다 — 이 단계는 해당 프로바이더 고유 동작을 재므로 대체 불가`
@@ -156,13 +194,29 @@ for (const step of STEPS) {
     }
   }
   process.stdout.write(`RUN   ${step.label} ... `);
+  if (step.vitest) {
+    try {
+      const tests = await runStructuredVitest({ repo, pnpm: PNPM, mode: step.id });
+      const status = tests.status === "INCOMPLETE" ? "BLOCKED" : tests.status;
+      console.log(`${tests.status} (${(tests.ms / 1000).toFixed(1)}s) — ${tests.executed} executed, ${tests.passed} passed, ${tests.failed} failed, ${tests.skipped} skipped, ${tests.todo} todo`);
+      for (const pkg of tests.packages) console.log(`        ${pkg.name}: ${pkg.status}, ${pkg.executed} executed, ${pkg.skipped} skipped, ${pkg.todo} todo (${pkg.reason})`);
+      for (const pkg of tests.packages) for (const file of pkg.failedFiles ?? []) console.log(`        FAILED_FILE ${pkg.name}/${file}`);
+      for (const item of tests.excludedFiles) console.log(`        EXCLUDED ${item.package}/${item.file} — ${item.reason}`);
+      for (const item of tests.nonTestPackages) console.log(`        NO_TEST_PACKAGE ${item.name} — ${item.reason}`);
+      results.push({ ...step, status, ms: tests.ms, kind: "vitest", tests, ...(status === "BLOCKED" ? { blockReason: "선택된 시험에 실행하지 않은 항목 또는 유효한 결과 없음" } : {}) });
+    } catch {
+      console.log("FAIL — 구조화 시험 결과를 확인하지 못했습니다.");
+      results.push({ ...step, status: "FAIL", kind: "vitest" });
+    }
+    continue;
+  }
   const { code, ms, tail } = await run(step);
   // exit 2 = 프로바이더 계정 문제로 검증을 수행할 수 없었다는 신호(제품 실패 아님).
   const status = code === 0 ? "PASS" : code === 2 && step.needsKey ? "BLOCKED" : "FAIL";
   console.log(`${status} (${(ms / 1000).toFixed(1)}s)`);
   if (status === "FAIL") for (const l of tail.slice(-12)) console.log(`        ${l}`);
   if (status === "BLOCKED") console.log(`        ${tail.filter((l) => /BLOCKED|credit|quota|billing/i.test(l)).slice(-2).join(" | ") || "provider account issue"}`);
-  results.push({ ...step, status, ms });
+  results.push({ ...step, status, ms, kind: "command" });
 }
 
 const failed = results.filter((x) => x.status === "FAIL");
@@ -171,7 +225,9 @@ const blocked = results.filter((x) => x.status === "BLOCKED");
 const passed = results.filter((x) => x.status === "PASS");
 
 console.log(`\n${"=".repeat(64)}`);
-const verdict = failed.length > 0 ? "FAIL" : blocked.length > 0 ? "BLOCKED" : "PASS";
+const afterHash = sourceHash(verificationInputs(await sourceInventory(repo)));
+const summary = summarizeVerification(results, { sourceChanged: beforeHash !== afterHash });
+const { verdict } = summary;
 console.log(`VERIFY: ${verdict} — ${passed.length} passed, ${failed.length} failed, ${blocked.length} blocked, ${skipped.length} skipped`);
 // 차단 사유는 단계마다 다르다. 하나로 뭉뚱그리면 틀린 진단이 되고,
 // 틀린 진단은 없는 진단보다 나쁘다 — 엉뚱한 곳을 파게 만든다.
@@ -183,4 +239,9 @@ if (blocked.length) {
 if (skipped.length) console.log(`skipped (not verified, not counted as passing): ${skipped.map((s) => s.label).join(", ")}`);
 if (failed.length) console.log(`failed: ${failed.map((f) => f.label).join(", ")}`);
 console.log("=".repeat(64));
-process.exit(failed.length > 0 ? 1 : blocked.length > 0 ? 2 : 0);
+if (summary.sourceChanged) console.log("검사 중 소스가 바뀌었습니다. 현재 버전의 통과로 사용할 수 없습니다.");
+if (selection.report) {
+  const path = await writeVerificationReport(reportDirectory, { startedAt, sourceHashBefore: beforeHash, sourceHashAfter: afterHash, summary, results });
+  console.log(`보고서: ${path}`);
+}
+process.exit(summary.exitCode);

@@ -178,7 +178,19 @@ async function maintenance(purpose, work) {
   }
 }
 
-export async function assertQuiescent(client, runRoot = RUN) {
+export async function assertNoWorkspaceApi(workspaceRoot = WORKSPACE) {
+  // 시작기가 관리하지 않는 포트·다른 DB의 직접 API도 같은 파일을 바꿀 수 있다.
+  // maintenance를 잡은 뒤 실제 workspace 소유권을 확인한다. 죽었거나 깨진 잠금도 백업이 임의 회수하지 않는다.
+  const workspace = (await realpath(workspaceRoot)).normalize("NFC");
+  const path = join(dirname(dirname(workspace)), "run/local-api", `${hash(workspace)}.lock`);
+  let parent = dirname(path);
+  while (!await exists(parent) && parent !== dirname(parent)) parent = dirname(parent);
+  await noLinks(parent);
+  if (await exists(path) || await exists(`${path}.recovery`)) throw new Error("작업 폴더 API 소유권 잠금이 남아 있습니다. 기존 API를 정상 종료하세요. 깨진 잠금은 docs/26-durable-execution.md에 따라 확인하며 자동 삭제하지 않습니다.");
+}
+
+export async function assertQuiescent(client, runRoot = RUN, workspaceRoot = WORKSPACE) {
+  await assertNoWorkspaceApi(workspaceRoot);
   for (const entry of await readdir(runRoot, { withFileTypes: true })) {
     if (/^port-.*\.lock$/.test(entry.name)) throw new Error("앱이 실행 중이거나 시작 잠금이 남아 있습니다. AIOS 종료.command를 먼저 실행하세요.");
     if (entry.isDirectory() && entry.name !== "maintenance.lock") {

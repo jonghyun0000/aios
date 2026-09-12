@@ -3,7 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { NotFoundError, ValidationError } from "@aios/shared";
 import type { AppContext } from "../context.js";
 import { AgentOrchestrator } from "../agent/orchestrator.js";
-import { loadReferences, loadSavedHistory, referenceChunks, sessionLocks } from "../workspace.js";
+import { loadConversationPreferences, loadReferences, loadSavedHistory, referenceChunks, sessionLocks } from "../workspace.js";
+import { PREFERENCE_SCAN_LIMIT } from "../agent/preferences.js";
 import { executionService, type ExecutionRun } from "../execution/service.js";
 import { registerExecutionRoutes } from "./execution.js";
 import { requireRole } from "../auth.js";
@@ -67,10 +68,11 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
     if (req.auth.via !== "local") await ctx.usage.checkQuota(req.auth.orgId);
     ctx.usage.bind({ orgId: req.auth.orgId, userId: req.auth.userId, sessionId });
     // Redis는 만료되는 캐시다. 웹 대화는 저장된 최근 100개 메시지를 매번 원본으로 사용한다.
-    const [savedHistory, files] = body.mode ? await Promise.all([
+    const [savedHistory, files, preferenceContext] = body.mode ? await Promise.all([
       body.context.useMemory ? loadSavedHistory(ctx, req.auth.orgId, sessionId) : Promise.resolve([]),
       loadReferences(ctx, req.auth.orgId, sessionId, session.project_id),
-    ]) : [undefined, []];
+      body.context.useMemory ? loadConversationPreferences(ctx, req.auth.orgId, sessionId, body.content) : Promise.resolve(undefined),
+    ]) : [undefined, [], undefined];
     const references = referenceChunks(files, body.content);
     const controller = new AbortController();
     const onClose = () => { if (!reply.raw.writableEnded) controller.abort(); };
@@ -91,7 +93,6 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
 
     try {
       if (body.tools.enabled) execution = await executionService(ctx).start(req.auth.orgId, req.auth.userId, sessionId, body.verificationCommand, controller.signal, send);
-      if (body.mode) send({ type: "workspace_context", historyCount: savedHistory?.length ?? 0, files: files.map((file) => file.name), excerpted: references.excerpted });
       for await (const event of orchestrator.run({
         orgId: req.auth.orgId,
         userId: req.auth.userId,
@@ -103,6 +104,11 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
         execution,
         content: body.content,
         savedHistory,
+        conversationPreferences: preferenceContext?.preferences,
+        onContextPrepared: body.mode ? (prepared) => send({ type: "workspace_context", historyCount: prepared.historyCount, files: files.map((file) => file.name), excerpted: references.excerpted || prepared.referenceIndexes.length < references.chunks.length,
+          memory: { enabled: body.context.useMemory, historyLimit: 100, preferenceScanLimit: PREFERENCE_SCAN_LIMIT, scannedUserMessages: preferenceContext?.scannedUserMessages ?? 0, restoredPreferences: preferenceContext?.preferences ?? [] },
+          sources: prepared.referenceIndexes.map((i) => references.sources[i]!), referenceMode: prepared.referenceIndexes.length ? references.referenceMode : "none",
+        }) : undefined,
         references: references.chunks,
         mode: body.mode,
         taskClass: body.routing.taskClass,

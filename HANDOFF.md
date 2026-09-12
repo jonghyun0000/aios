@@ -7,7 +7,16 @@
 
 ## 0. 30초 요약
 
-- **최신 — 공개 체험판·보안 경계·설치 진단(2026-09-12):** `apps/demo`는 실제 AIOS API와 분리된 가상 파일/모의 응답 체험판이다.
+- **최신 — 실제 제품의 기억·근거·실행 내구성·접근성 보완(2026-09-12):** 사용자는 다른 M1 Air 13인치/16GB/256GB에서 진행하기 전에 고정 평가표 90점 이상을 요구했다. 다른 Mac에는 접속하지 않았고 설치·독립 디스크 복원·신규 사용자/보조기기 관찰은 여전히 미검증이다.
+  최근 사용자 메시지 최대500개에서 좁은 답변 선호 enum을 복원하고 초기화/기억 끄기를 지원한다. 자료는 한국어 조사·본문 일치·파일 간 분산으로 발췌하며 모델에 실제 전달된 파일·행만 표시한다. 현재 요청의 형식과 과거 일회성 형식을 분리하며 원문/모델 출력을 몰래 바꾸지 않는다.
+  작업 폴더별 단일 API 소유권을 DB 연결 전에 강제하고 백업 유지보수와 상호 배제한다. 복구 중 파일 성공/DB 응답 실패 뒤 명시적 재시도를 지원하며, 다른 사람의 수동 변경은 보존한다. 다른 workspace의 API가 같은 DB를 공유하는 구성과 분산 실행은 지원하지 않는다.
+  실제 앱의 키보드 스크롤·모달 초점·승인 오류 재시도·설정 조회 장애·작은 노트북 창의 대화 내역 표시를 보완했다. 웹 단위35, 별도 합성 API 접근성36/36, axe48회 자동 위반0. 색상 대비46회 incomplete/358대상 출현은 수동 해결로 계산하지 않는다.
+  코드 동결 후 타입·린트·이식 가능 단위450·운영 결함 주입·격리 내구성25·T7 색인1·빌드 **7단계 PASS**, 전후 코드 지문 `25cbbe0fca9fbab77efbbfbd547cd71e51c4b1510e556f96132565f90b88dfae`. 제외한5파일/비시험5패키지는 별도 보고하며 0개·SKIP·오래된 JSON을 PASS로 세지 않는다.
+  전체 브라우저 **123 PASS / 0 FAIL / 3 desktop 해당 없음**, 재시도0. 실제 API와 합성 API 범위를 구분한다. 새 빌드 정상 재시작(instance `2912bba6-bfd6-4718-84cd-1fdd7ad54e93`) 후 실제 맥락8과제×3회 **24/24**, 자료 기반 대표 업무 **3/3**가 승인·실제 검증·파일 확인·복구까지 완료됐다.
+  최초 모델 평가18/24, 중간23/24와 대표 업무0/3·2/3 실패도 보존했다. 최신 성공만 골라 과거 실패를 지우거나 일반 정답률·속도 개선으로 포장하지 않는다. 시험이 만든 맥락/대표/3단계 세션만 휴지통으로 정리했고 사용자 원본은 변경하지 않았다.
+  근거는 `docs/25`~`docs/29`이며 공개 체험판은 이번에 재배포하지 않았다. 최신 원격 CI와 점수 확정은 `docs/22-project-scorecard.md`에서 확인한다.
+- 아래 공개 체험판·1~4단계 수치는 당시 기록이다. 현재 보완의 근거와 섞거나 누적 검사 수로 점수를 가산하지 않는다.
+- **이전 — 공개 체험판·보안 경계·설치 진단(2026-09-12):** `apps/demo`는 실제 AIOS API와 분리된 가상 파일/모의 응답 체험판이다.
   공개 대표 주소 `https://aios-demo-mu.vercel.app`. 정상 승인·거절·검증 실패·복구 충돌을 보여주며 개인 파일/키/DB 업로드나 로컬 서버 공개는 하지 않는다.
   Vercel 프로젝트 `aios-demo`에 감사한 정적 빌드만 업로드했다. Git 연결 자동 배포가 아니므로 소스 push만으로 체험판이 갱신되지 않는다.
   배포 도구의 긴 URL은 인증이 걸릴 수 있다. 공개 주소는 Vercel Domains의 Production 도메인으로 확인했고 미리보기 보호는 끄지 않았다.
@@ -164,14 +173,16 @@ eval "$(./scripts/dev-up.sh --export-only)"; set -a; . ./.env.local; set +a
 
 ## 4. 검증 — `node scripts/verify-all.mjs [단계...]`
 
-인자 없이 돌리면 모든 단계(약 15~40분 — 로컬 모델 속도에 따라 크게 흔들린다). 로컬 4단계 회귀는 `typecheck lint unit local-ops build`를 사용한다.
-전체 실행의 구형 phase8은 파괴적 정리/롤백을 포함하므로 사용자 데이터가 있는 환경에서 무심코 실행하지 말 것. 로컬 복원 검사는 새 `local-backup.mjs restore-check`로 분리했다.
+인자 없이 돌리면 `typecheck lint unit build`의 정적 4단계만 실행한다. 로컬 운영 회귀는 `typecheck lint unit local-ops build --report`를 사용한다. 오타/중복 단계는 실행 전에 거부하며, SKIP·차단·검사 0개는 PASS가 아니다. 검사 중 코드 지문이 바뀌면 현재 버전의 통과로 사용할 수 없다. 상세 `docs/28-release-verification.md`.
+구형 전체 실행은 `--legacy-full --allow-destructive-phase8`을 모두 명시해야 한다. phase8은 파괴적 정리/롤백을 포함하므로 이 옵션을 사용자 승인으로 해석하거나 운영 데이터에 실행하지 말 것. 로컬 복원 검사는 `local-backup.mjs restore-check`로 분리했다.
 **출력을 `tail` 로 자르지 말고 파일로 남겨라** — 실패 원인이 앞부분에 있다.
 
 | 단계 id | 내용 | 조건 | 최근 소요 |
 |---|---|---|---|
 | typecheck · lint · unit · build | 정적 검사 | — | 각 1~40s |
 | local-ops | 로컬 시작/정지·백업·소스 패키지 결함 주입 | T7, 로컬 프로세스 검사 | 약 3s |
+| durability-local | 새 DB와 폴더에서 승인·복구·다중 프로세스 소유권 | `AIOS_DURABILITY_TEST=1`, 로컬 `DATABASE_URL`(CREATEDB); 운영 DB 변경 없음 | 현재 실행 근거는 docs/26 |
+| context-live | 실제 API·DB·Redis·모델의 고정 8과제×3회 | `AIOS_CONTEXT_PERSISTENCE_TEST=1`, 로컬 DB/Redis; 이 실행의 새 합성 대화만 생성·휴지통 이동 | 현재 실행 근거는 docs/25 |
 | s2-claude | Claude 고유 동작 | `ANTHROPIC_API_KEY` 필요 → 없으면 SKIP | — |
 | s2-memory | STM/LTM 부하·누수 | — | 30s |
 | phase3 | 라우터 정책·폴백·서킷브레이커 | 프로바이더 1개 이상(로컬 포함) | 10~40s |
@@ -180,7 +191,7 @@ eval "$(./scripts/dev-up.sh --export-only)"; set -a; . ./.env.local; set +a
 | s3-collab · marketplace · billing · oauth · webui | Sprint 3 기능 | 서버 | 각 1~3s |
 | s4-bigdata · s5-bigdata-api | 데이터 계층 도구·HTTP | 서버(s5) | 1~5s |
 | s6-collab-multi | 협업 인스턴스 2개 실제 기동 | 서버 | 3s |
-| e2e | Playwright 52개 (데스크톱·모바일, 대비 측정 포함) | 서버 | 1~2분 |
+| e2e | Playwright 126개 중123통과/3desktop 해당없음 (데스크톱·모바일, 합성 API 포함) | 서버 | 약2.5분 |
 | phase6 | 성능·부하(로컬 LLM 동시 12스트림 포함) | — | 5~15분 |
 | phase7 | 보안(인젝션·샌드박스·RBAC·JWT) | — | 1~3분 |
 | phase8 | 배포 준비(이미지 새로 빌드·백업/복구·SIGTERM·롤백) | Docker | 2~5분 |
@@ -188,7 +199,7 @@ eval "$(./scripts/dev-up.sh --export-only)"; set -a; . ./.env.local; set +a
 - `verify-all` 은 **통과한 단언을 출력하지 않는다.** 상세는 `pnpm --filter @aios/verify <스크립트>` 로 직접.
 - 서버 의존 단계 직전에 서버 생존을 확인하고, 죽어 있으면 `BLOCKED` 로 표시하며 크래시 리포트 위치를 알려 준다.
 - `Full scenario` 는 **로컬 7B 의 비결정성 때문에 가끔 실패한다**(§7). 실패 메시지에 턴 수·게이트 개입 횟수·모델이 쓴 코드가 남는다.
-- **CI 범위를 구분한다.** 공개 저장소의 `.github/workflows/ci.yml`은 Node 22 정적 검사·빌드·머신 독립 단위 검사를 수행한다.
+- **CI 범위를 구분한다.** 공개 저장소의 `.github/workflows/ci.yml`은 Node 22 정적 검사·빌드·머신 독립 단위 검사, 정적 데모와 실제 앱의 합성 API/WS 접근성·키보드 회귀를 수행한다.
   T7/macOS 전용 시험·실제 모델·사용자 데이터 복원은 로컬에서 별도로 검증해야 한다. 과거 Git 추적 전에는 CI 실행 기록이 없었으며, 그때의 로컬 통과 기록이 원격 CI 통과를 뜻하지 않는다.
 
 ---

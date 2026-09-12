@@ -6,6 +6,7 @@ import { evaluateCompletion, type CompletionCheck } from "@aios/ai";
 import { GitService } from "@aios/tools";
 import type { AppContext } from "../context.js";
 import type { ExecutionRun } from "../execution/service.js";
+import { renderPreferences, type ConversationPreference } from "./preferences.js";
 
 /**
  * Agent Orchestrator — AIOS의 "커널 메인 루프".
@@ -28,6 +29,8 @@ export interface RunInput {
   projectName?: string;
   content: string;
   savedHistory?: ChatMessage[];
+  conversationPreferences?: ConversationPreference[];
+  onContextPrepared?: (context: { historyCount: number; referenceIndexes: number[] }) => void;
   references?: string[];
   mode?: ChatMode;
   taskClass?: TaskClass;
@@ -80,6 +83,7 @@ export class AgentOrchestrator {
     ]);
     yield { type: "timing", phase: "save_input", durationMs: performance.now() - inputSaving };
     if (strategy?.calculation) {
+      input.onContextPrepared?.({ historyCount: 0, referenceIndexes: [] });
       input.signal?.throwIfAborted();
       yield { type: "timing", phase: "first_text", durationMs: performance.now() - started };
       yield { type: "text_delta", text: strategy.calculation.text };
@@ -109,15 +113,16 @@ export class AgentOrchestrator {
       workdir: input.projectRoot ?? "(none)",
     });
     const assembled = assemblePrompt({
-      systemCore: systemCore + (input.execution ? "\nSafety: All file writes and commands require explicit user approval. Commands have a read-only workspace and no network. Use write_file for edits. Do not claim verification from your own prose. Refusal means stop, not retry. Do not auto-commit." : ""),
+      systemCore: systemCore + (input.useMemory && input.conversationPreferences ? renderPreferences(input.conversationPreferences) : "") + (input.execution ? "\nSafety: All file writes and commands require explicit user approval. Commands have a read-only workspace and no network. Use write_file for edits. Do not claim verification from your own prose. Refusal means stop, not retry. Do not auto-commit." : ""),
       memoryFacts: memCtx.facts,
       ragChunks: [...(input.references ?? []), ...ctx.retriever.format(ragHits)],
       // 캐시 요약과 원문을 함께 넣으면 같은 사실이 중복되므로 DB 복원 시 요약을 제외한다.
       stmSummary: input.savedHistory ? null : memCtx.stmSummary,
-      history: input.savedHistory ?? memCtx.history.slice(0, -1),
+      history: input.useMemory ? input.savedHistory ?? memCtx.history.slice(0, -1) : [],
       userMessage: input.content,
       budgetTokens,
     });
+    input.onContextPrepared?.({ historyCount: Math.max(0, assembled.messages.length - 1), referenceIndexes: assembled.retainedRagIndexes.filter((i) => i < (input.references?.length ?? 0)) });
     if (assembled.dropped.length) yield { type: "context_trimmed", sections: assembled.dropped };
 
     const toolSpecs = input.toolsEnabled ? ctx.tools.specs() : undefined;

@@ -27,8 +27,8 @@ importers:
         specifier: ^8.12.0
         version: 8.22.0
       pnpm:
-        specifier: 9.15.9
-        version: 9.15.9
+        specifier: 9.12.0
+        version: 9.12.0
       turbo:
         specifier: ^2.1.0
         version: 2.10.8
@@ -238,6 +238,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@5.4.21(@types/node@20.19.43))
+      axe-core:
+        specifier: 4.10.3
+        version: 4.10.3
       eslint-plugin-react-hooks:
         specifier: ^5.1.0
         version: 5.2.0(eslint@9.39.5)
@@ -1439,6 +1442,10 @@ packages:
   avvio@8.4.0:
     resolution: {integrity: sha512-CDSwaxINFy59iNwhYnkvALBwZiTydGkOecZyPkqBpABYR1KqGEsET0VOOYDwtleZSUIdeY36DC2bSZ24CO1igA==}
 
+  axe-core@4.10.3:
+    resolution: {integrity: sha512-Xm7bpRXnDSX2YE2YFfBk2FnF0ep6tmG7xPh8iHee8MIcrgq762Nkce856dYtJYLkuIoYZvGfTs/PbZhideTcEg==}
+    engines: {node: '>=4'}
+
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -2075,8 +2082,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  pnpm@9.15.9:
-    resolution: {integrity: sha512-aARhQYk8ZvrQHAeSMRKOmvuJ74fiaR1p5NQO7iKJiClf1GghgbrlW1hBjDolO95lpQXsfF+UA+zlzDzTfc8lMQ==}
+  pnpm@9.12.0:
+    resolution: {integrity: sha512-Sr9yUITXvLr71yi/x77mHy95H5d/2HVCs1edyyNQTRcNRjN5ReTGZIXNEtWIoMDlcO2cR358zdhQfPBfP5Lqyg==}
     engines: {node: '>=18.12'}
     hasBin: true
 
@@ -3366,6 +3373,8 @@ snapshots:
       '@fastify/error': 3.4.1
       fastq: 1.20.1
 
+  axe-core@4.10.3: {}
+
   balanced-match@1.0.2: {}
 
   balanced-match@4.0.4: {}
@@ -4056,7 +4065,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.2
 
-  pnpm@9.15.9: {}
+  pnpm@9.12.0: {}
 
   postcss@8.5.25:
     dependencies:

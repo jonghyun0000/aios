@@ -1,4 +1,5 @@
 import { get, apiKeyStore } from "../lib/api.js";
+import { isExpectedMissingSession } from "../lib/settings-session.js";
 import { useAsync, AsyncBoundary } from "../components/Async.js";
 import { useAuth } from "../lib/auth.js";
 import { LocalOperations } from "../components/LocalOperations.js";
@@ -16,8 +17,11 @@ interface SessionInfo {
 
 export function SettingsPage() {
   const { me, signOut } = useAuth();
-  // API 키 로그인에는 세션이 없으므로 404가 정상이다. 그 경우 에러 대신 안내를 보여준다.
-  const session = useAsync(() => get<SessionInfo>("/v1/auth/session").catch(() => null), []);
+  // 세션이 없는 인증 방식의 401/404만 정상이다. 저장소 장애까지 정상 안내로 숨기지 않는다.
+  const session = useAsync(() => get<SessionInfo>("/v1/auth/session").catch((error: unknown) => {
+    if (isExpectedMissingSession(error, me?.via)) return null;
+    throw error;
+  }), [me?.via]);
 
   return (
     <div className="main-narrow" style={{ maxWidth: 700 }}>
@@ -28,7 +32,7 @@ export function SettingsPage() {
 
       <h2>인증</h2>
       <div className="card">
-        <table>
+        <table className="settings-table" aria-label="인증 정보">
           <tbody>
             <tr><th>조직</th><td className="mono">{me?.orgId}</td></tr>
             <tr><th>사용자</th><td className="mono">{me?.userId ?? (me?.via === "local" ? "내 컴퓨터 사용자" : "(API 키 — 사람 주체 없음)")}</td></tr>
@@ -50,10 +54,11 @@ export function SettingsPage() {
       </div>
 
       <h2>세션</h2>
+      {session.error && <button onClick={session.reload}>세션 정보 다시 확인</button>}
       <AsyncBoundary loading={session.loading} error={session.error}>
         {session.data?.session ? (
           <div className="card">
-            <table>
+            <table className="settings-table" aria-label="로그인 세션 정보">
               <tbody>
                 <tr><th>이메일</th><td>{session.data.session.email}</td></tr>
                 <tr><th>이름</th><td>{session.data.session.display_name ?? "-"}</td></tr>
@@ -66,7 +71,7 @@ export function SettingsPage() {
             {session.data.session.organizations && (
               <>
                 <h2 style={{ marginTop: 18 }}>소속 조직</h2>
-                <table>
+                <table className="settings-table" aria-label="소속 조직">
                   <thead><tr><th>조직</th><th>역할</th></tr></thead>
                   <tbody>
                     {session.data.session.organizations.map((o) => (

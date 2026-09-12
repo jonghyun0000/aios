@@ -41,10 +41,15 @@ export async function assertState(root: string, cp: Checkpoint, expected: string
   const state = await readState(root, cp.path);
   if ((state ? hash(state.content) : null) !== expected) throw conflict();
 }
-export async function restoreCheckpoint(root: string, cp: Checkpoint): Promise<void> {
+export async function restoreCheckpoint(root: string, cp: Checkpoint, resume = false): Promise<{ alreadyRestored: boolean }> {
+  // 복구 의도가 DB에 먼저 남은 요청만 중간 종료를 재개한다. 단순 원본 해시 일치를 최초 복구 성공으로 오인하지 않는다.
+  if (resume) {
+    const current = await readState(root, cp.path);
+    if ((current ? hash(current.content) : null) === cp.beforeHash) return { alreadyRestored: true };
+  }
   await assertState(root, cp, cp.afterHash);
   const target = await safeJailPath(root, cp.path);
-  if (cp.before === null) { await unlink(target); return; }
+  if (cp.before === null) { await unlink(target); await assertState(root, cp, null); return { alreadyRestored: false }; }
   const temp = join(dirname(target), `.aios-restore-${randomUUID()}`);
   const file = await open(temp, "wx", cp.mode);
   try {
@@ -53,4 +58,5 @@ export async function restoreCheckpoint(root: string, cp: Checkpoint): Promise<v
     await rename(temp, target);
   } finally { await file.close().catch(() => {}); await unlink(temp).catch(() => {}); }
   await assertState(root, cp, cp.beforeHash);
+  return { alreadyRestored: false };
 }

@@ -19,6 +19,7 @@ colima start                                   # 재부팅 후
 ./scripts/dev-up.sh                            # 전체 기동 (10초)
 eval "$(./scripts/dev-up.sh --export-only)"; set -a; . ./.env.local; set +a
 node scripts/verify-all.mjs typecheck lint unit build   # 최소 검증
-node scripts/verify-all.mjs                    # 전체 21단계 (15~40분)
+node scripts/verify-all.mjs                    # 기본 정적 4단계 (파괴적 시험 제외)
+node scripts/verify-all.mjs --list             # 단계·위험 확인. 구형 전체는 격리 환경에서만 명시적으로 실행
 cd apps/verify && REPEATS=5 pnpm eval          # 품질 측정
 ```

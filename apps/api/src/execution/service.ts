@@ -6,6 +6,7 @@ import type { AppContext } from "../context.js";
 import { assertState, loadCheckpoint, prepareCheckpoint, restoreCheckpoint, saveCheckpoint, type Checkpoint } from "./checkpoints.js";
 
 const services = new WeakMap<AppContext, ExecutionService>();
+const workspaceLocks = new Set<string>();
 export function executionService(ctx: AppContext): ExecutionService {
   let service = services.get(ctx);
   if (!service) { service = new ExecutionService(ctx); services.set(ctx, service); }
@@ -18,7 +19,6 @@ const busy = () => new AiosError("workspace_busy", "다른 실행이 이 작업 
 export class ExecutionService {
   readonly active = new Map<string, ExecutionRun>();
   readonly pending = new Map<string, { run: ExecutionRun; settle(value: boolean): boolean }>();
-  private locked = false;
   private workspaceOrg?: Promise<string | undefined>;
   readonly root: string;
   readonly store: string;
@@ -27,9 +27,11 @@ export class ExecutionService {
     this.store = store ?? resolve(dirname(this.root), "..", "checkpoints", "stage3");
   }
   async withWorkspace<T>(work: () => Promise<T>): Promise<T> {
-    if (this.locked) throw busy();
-    this.locked = true;
-    try { return await work(); } finally { this.locked = false; }
+    const key = this.root.normalize("NFC");
+    // 같은 프로세스에서 컨텍스트를 두 번 조립해도 별도 잠금을 얻지 못한다. 프로세스 간 배제는 main의 소유권 잠금이다.
+    if (workspaceLocks.has(key)) throw busy();
+    workspaceLocks.add(key);
+    try { return await work(); } finally { workspaceLocks.delete(key); }
   }
   async assertOrg(orgId: string): Promise<void> {
     // 전용 호스트 폴더는 로컬 조직 하나의 자원이다. DB 행 격리만으로 파일 격리가 되지는 않는다.
@@ -41,9 +43,11 @@ export class ExecutionService {
     if (!this.ctx.env.LOCAL_WORKSPACE_ROOT) throw new AiosError("workspace_required", "승인·복구용 로컬 작업 폴더가 설정되지 않았습니다. 도구를 끄거나 LOCAL_WORKSPACE_ROOT를 설정해 주세요.", { status: 409 });
     await this.assertOrg(orgId);
     const id = randomUUID();
-    await this.ctx.pool.query("insert into execution_runs (id,org_id,session_id,workspace_root,verification_command) values ($1,$2,$3,$4,$5)", [id, orgId, sessionId, this.root, command ?? null]);
     const run = new ExecutionRun(this, id, orgId, userId, sessionId, signal, notify, command);
-    this.active.set(id, run); run.notify(); return run;
+    this.active.set(id, run);
+    try { await this.ctx.pool.query("insert into execution_runs (id,org_id,session_id,workspace_root,verification_command) values ($1,$2,$3,$4,$5)", [id, orgId, sessionId, this.root, command ?? null]); }
+    catch (err) { this.active.delete(id); throw err; }
+    run.notify(); return run;
   }
   async list(orgId: string, sessionId: string) {
     const owner = await this.ctx.pool.query("select id from sessions where id=$1 and org_id=$2 and deleted_at is null", [sessionId, orgId]);
@@ -51,8 +55,11 @@ export class ExecutionService {
     const { rows } = await this.ctx.pool.query("select * from execution_runs where session_id=$1 and org_id=$2 order by created_at desc limit 20", [sessionId, orgId]);
     for (const run of rows) {
       if (run.status === "running" && !this.active.has(run.id)) {
-        await this.ctx.pool.query("update execution_runs set status='interrupted',summary='서버 재시작으로 실행 확인이 끊겼습니다. 변경 내역을 확인해 주세요.',finished_at=now() where id=$1 and status='running'", [run.id]);
-        await this.ctx.pool.query("update execution_actions set status='interrupted',finished_at=now() where run_id=$1 and status in ('pending','approved','running')", [run.id]);
+        await this.ctx.pool.query(`with interrupted as (
+          update execution_runs set status='interrupted',summary='서버 재시작으로 실행 확인이 끊겼습니다. 변경 내역을 확인해 주세요.',finished_at=now()
+          where id=$1 and status='running' returning id
+        ) update execution_actions set status='interrupted',finished_at=now()
+          where run_id in (select id from interrupted) and status in ('pending','approved','running')`, [run.id]);
         run.status = "interrupted"; run.summary = "서버 재시작으로 실행 확인이 끊겼습니다. 변경 내역을 확인해 주세요.";
       }
       // 경로·백업 내용은 모델 텍스트가 아닌 서버 기록이다. 파일 본문은 승인 미리보기만 반환한다.
@@ -81,19 +88,34 @@ export class ExecutionService {
         join sessions s on s.id=r.session_id where a.id=$1 and r.org_id=$2 and s.org_id=$2 and r.session_id=$3 and s.deleted_at is null`, [id, orgId, sessionId]);
       const row = rows[0];
       if (!row) throw new NotFoundError("checkpoint");
-      if (resolve(row.workspace_root) !== this.root || !row.checkpoint || row.restored_at || !row.decided_at || ["pending", "approved", "running", "rejected", "expired"].includes(row.status)) throw new AiosError("restore_unavailable", "복구할 수 있는 변경이 아닙니다.", { status: 409 });
+      if (resolve(row.workspace_root).normalize("NFC") !== this.root.normalize("NFC") || !row.checkpoint || !row.decided_at || ["pending", "approved", "running", "rejected", "expired"].includes(row.status)) throw new AiosError("restore_unavailable", "복구할 수 있는 변경이 아닙니다.", { status: 409 });
       const cp = await loadCheckpoint(this.store, id);
       if (cp.afterHash !== row.after_hash || cp.beforeHash !== row.before_hash || cp.path !== row.arguments.path) throw new Error("체크포인트 기록 불일치");
+      if (row.restored_at) {
+        // 응답만 유실된 복구 재요청은 파일을 다시 쓰지 않는다. 이후 수동 변경은 그대로 충돌로 보존한다.
+        if (row.status !== "restored") throw new AiosError("restore_unavailable", "복구 기록을 확인해야 합니다.", { status: 409 });
+        await assertState(this.root, cp, cp.beforeHash);
+        return { ok: true, removedNewFile: cp.before === null, alreadyRestored: true };
+      }
       // 복구 의도를 먼저 남긴다. 실제 상태 확인 없이 복구 완료로 기록하지 않는다.
-      await this.ctx.pool.query("update execution_actions set status='restoring' where id=$1", [id]);
+      const intent = await this.ctx.pool.query("update execution_actions set status='restoring' where id=$1 and status=$2 and restored_at is null returning id", [id, row.status]);
+      if (!intent.rows.length) throw busy();
       try {
-        await restoreCheckpoint(this.root, cp);
-        await this.ctx.pool.query("update execution_actions set status='restored',restored_at=now() where id=$1", [id]);
-        await this.ctx.pool.query("update execution_runs set status='restored',summary='파일 변경을 복구했습니다. 이전 검증은 복구 전 상태의 결과이므로 다시 검증해 주세요.' where id=$1", [row.run_id]);
-        return { ok: true, removedNewFile: cp.before === null };
+        const result = await restoreCheckpoint(this.root, cp, row.status === "restoring");
+        // 하나의 SQL 문으로 action/run을 함께 기록한다. 중간 DB 장애가 파일 성공/기록 성공을 갈라놓지 않게 한다.
+        const saved = await this.ctx.pool.query(`with restored_action as (
+          update execution_actions set status='restored',restored_at=now() where id=$1 and status='restoring' returning run_id
+        ) update execution_runs set status='restored',summary='파일 변경을 복구했습니다. 이전 검증은 복구 전 상태의 결과이므로 다시 검증해 주세요.'
+          where id in (select run_id from restored_action) returning id`, [id]);
+        if (!saved.rows.length) throw new Error("복구 기록 저장 실패");
+        return { ok: true, removedNewFile: cp.before === null, ...result };
       } catch (err) {
-        await this.ctx.pool.query("update execution_actions set status='restore_conflict' where id=$1", [id]);
-        throw err;
+        if (err instanceof AiosError && err.code === "file_conflict") {
+          await this.ctx.pool.query("update execution_actions set status='restore_conflict' where id=$1 and status='restoring'", [id]);
+          throw err;
+        }
+        // 파일 조작/DB 응답이 불확실하면 의도를 지우지 않는다. 다음 명시적 재시도가 해시를 확인하여 재개한다.
+        throw new AiosError("restore_incomplete", "복구 기록 확인이 끝나지 않았습니다. 파일을 임의로 덮어쓰지 말고 같은 변경의 복구를 다시 요청해 주세요.", { status: 503 });
       }
     });
   }

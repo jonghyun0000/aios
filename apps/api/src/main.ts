@@ -1,6 +1,8 @@
 import { createContext } from "./context.js";
 import { buildServer } from "./server.js";
 import { safeErrorSummary } from "./safe-logging.js";
+import { loadEnv } from "@aios/shared";
+import { acquireLocalApiOwnership, LocalApiOwnershipError } from "./execution/ownership.js";
 
 /**
  * API 서버 엔트리포인트.
@@ -8,6 +10,9 @@ import { safeErrorSummary } from "./safe-logging.js";
  * 롤링 배포에서 진행 중인 SSE 스트림을 자르지 않기 위한 최소 조건.
  */
 async function main() {
+  // DB를 달리 설정하거나 다른 포트로 띄워도 같은 호스트 폴더에 쓰는 API는 하나뿐이어야 한다.
+  const workspace = loadEnv().LOCAL_WORKSPACE_ROOT;
+  const ownership = workspace ? await acquireLocalApiOwnership(workspace) : undefined;
   const ctx = await createContext();
   const app = await buildServer(ctx);
 
@@ -24,6 +29,7 @@ async function main() {
       try {
         await app.close(); // fastify가 in-flight 요청 완료를 기다린다
         await ctx.close();
+        await ownership?.release();
         process.exit(0);
       } catch (err) {
         app.log.error({ err }, "graceful shutdown failed; exiting anyway");
@@ -45,6 +51,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(JSON.stringify({ event: "api.start_failed", error: safeErrorSummary(err) }));
+  // 이 클래스의 안내는 고정 문구뿐이다. 외부 오류 원문이나 설정값을 다시 노출하지 않는다.
+  console.error(JSON.stringify({ event: "api.start_failed", error: err instanceof LocalApiOwnershipError ? { code: err.code, message: err.message } : safeErrorSummary(err) }));
   process.exit(1);
 });

@@ -19,12 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      # 공식 릴리스의 불변 커밋에 고정. CI 코드 실행에 저장소 토큰을 남기지 않는다.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24 runtime
+        with:
+          persist-credentials: false
       # package.json의 packageManager와 정확히 맞춘다. action의 "9"는 "9.12.0"과 충돌한다.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 9.12.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -36,24 +39,20 @@ jobs:
         run: pnpm lint
       - name: Build
         run: pnpm build
-      - name: Portable package and UI unit tests
-        run: pnpm --filter '@aios/*' --filter '!@aios/api' --fail-if-no-match test
-      - name: Portable API unit tests
-        run: >-
-          pnpm --filter @aios/api exec vitest run
-          --exclude 'src/__tests__/checkpoints.test.ts'
-          --exclude 'src/__tests__/local-operations.test.ts'
-      - name: Read-only doctor and public demo policy tests
-        run: node --test scripts/doctor.test.mjs scripts/public-demo-policy.test.mjs
-      - name: Install Chromium for isolated public demo
+      - name: Portable unit tests with structured counts and explicit scope
+        run: node scripts/verify-vitest.mjs unit
+      - name: Read-only doctor and verification boundary tests
+        run: node --test scripts/doctor.test.mjs scripts/public-demo-policy.test.mjs scripts/verification-policy.test.mjs scripts/verification-report.test.mjs scripts/verify-vitest.test.mjs scripts/verify-app-a11y.test.mjs
+      - name: Install Chromium for isolated browser tests
         run: pnpm --filter @aios/web exec playwright install --with-deps chromium
       - name: Public demo browser regression
         run: node scripts/verify-public-demo.mjs
-      # 위 두 API 파일은 /Volumes/T7의 실제 fixture를 생성하므로 Linux runner에서는 제외한다.
-      # 패키지 이름으로 고른다. 경로 glob은 macOS NFD 한글 경로에서 조용히 0개를 고를 수 있다.
-      # 경로 문자열만 검증하거나 HTTP/DB를 대역으로 쓰는 나머지 API 단위검사는 포함한다.
+      - name: Actual app keyboard and accessibility regression (synthetic API)
+        run: node scripts/verify-app-a11y.mjs
+      # T7/실제DB opt-in API 5파일은 구조화 runner의 명시 portable 범위에서 제외해 보고한다.
+      # 실제 선택된 단언0개·내부SKIP·JSON결과 누락은 성공으로 처리하지 않는다.
       # scripts/local-*.test.mjs도 Mac/T7/로컬 프로세스 전용이다.
-      # 위 브라우저 검사는 독립 정적 데모만 검사한다. 실제 AIOS 앱의 브라우저 검사,
-      # DB 마이그레이션·Docker sandbox·Ollama eval·통합 백업/복원은
+      # 브라우저 검사는 독립 정적 데모와 실제 앱의 합성 API/WS 화면·키보드 경로를 검사한다.
+      # 실제 앱↔DB↔모델 통합, DB 마이그레이션·Docker sandbox·Ollama eval·통합 백업/복원은
       # 이 CI의 PASS 범위가 아니다. 전용 로컬 검증 결과는 docs/20-stage4-local-operations.md를 참조한다.
       # 이전 자동 배포 예제는 docs/examples/legacy-ci-deploy.yml로 옮겼으며 비활성 상태다.

@@ -31,7 +31,7 @@ async function fixture(t) {
 }
 
 test("명시 allowlist는 제품 소스·설정·마이그레이션·한글 launcher만 포함한다", () => {
-  for (const path of ["vercel.json", ".vercelignore", "apps/demo/package.json", "apps/demo/src/App.tsx", "apps/demo/public/favicon.svg", "scripts/doctor.mjs"]) assert.equal(allowedFile(path), true, path);
+  for (const path of ["vercel.json", ".vercelignore", "apps/demo/package.json", "apps/demo/src/App.tsx", "apps/demo/public/favicon.svg", "scripts/doctor.mjs", "apps/web/a11y.config.ts"]) assert.equal(allowedFile(path), true, path);
   for (const path of [".vercel/project.json", ".vercel/.env.production.local", "apps/demo/dist/assets/private.js", "apps/demo/.env.local"]) assert.equal(allowedFile(path), false, path);
   for (const path of [".env.example", ".npmrc", ".gitattributes", "apps/web/src/pages/Chat.tsx", "packages/tools/src/builtin/fs.ts", "packages/tools/scripts/mcp-smoke.ts", "infra/migrations/0003_api_key_role.sql", "AIOS 사용 패키지 만들기.command", "docs/20-stage4.md", ".github/workflows/ci.yml"]) assert.equal(allowedFile(path), true, path);
   for (const path of [".env", ".env.local", "apps/api/src/.env.test", "secrets/key.txt", "apps/api/src/secrets/token.json", "apps/web/dist/index.html", "apps/verify/logs/result.jsonl", "apps/web/test-results/result.json", "node_modules/pg/package.json", ".git/config", "docs/._guide.md", "tools/bigdata/data.parquet", "apps/api/src/database.dump", "private-notes.md", "apps/unknown/src/index.ts"]) assert.equal(allowedFile(path), false, path);

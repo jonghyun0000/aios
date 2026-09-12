@@ -77,6 +77,11 @@ code, pre, .mono { font-family: var(--mono); font-size: 12.5px; }
 .history-toggle { display: none; }
 .sidebar-history { display: flex; flex-direction: column; flex: 1; min-height: 80px; overflow: hidden; }
 .sidebar-history h2 { margin: 18px 10px 6px; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+/* 작은 노트북 창에서도 메뉴/검색이 대화 내역을 0 높이로 밀어내지 않는다. */
+@media (min-width: 761px) and (max-height: 700px) {
+  .sidebar { overflow-y: auto; }
+  .sidebar-history { flex: 0 0 220px; min-height: 220px; }
+}
 .history-more { width: 100%; margin: 10px 0; font-size: 12px; }
 .brand { font-weight: 700; font-size: 16px; padding: 4px 10px 14px; letter-spacing: -0.01em; }
 .brand small { display: block; font-weight: 400; font-size: 11px; color: var(--text-muted); letter-spacing: 0; }
@@ -184,7 +189,7 @@ th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
 .reference-list small { display: block; }
 .file-picker input { max-width: 100%; font-size: 12px; }
 .session-item.active { background: var(--bg-raised); box-shadow: inset 3px 0 var(--accent); font-weight: 600; }
-.chat-main { display: flex; flex-direction: column; min-height: 0; width: 100%; }
+.chat-main { display: flex; flex-direction: column; min-height: 0; width: 100%; overflow-y: auto; }
 .chat-welcome { flex: 1; min-height: 100px; display: grid; place-items: center; text-align: center; overflow: auto; }
 .chat-welcome h2 { font-size: 24px; letter-spacing: -.03em; margin: 14px 0 8px; }
 .welcome-symbol { color: var(--accent); font-size: 32px; }
@@ -195,7 +200,15 @@ th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
 .mode-hint { margin-top: 8px; font-size: 11px; }
 .generation-status { padding-top: 8px; }
 .composer-help { text-align: center; padding-top: 7px; font-size: 11px; }
-.messages { flex: 1; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 14px; }
+.messages { flex: 1; min-height: 120px; overflow-y: auto; padding-right: 8px; display: flex; flex-direction: column; gap: 14px; }
+.messages:focus-visible { outline-offset: -3px; }
+.context-controls { margin-top: 10px; }
+.context-controls summary { cursor: pointer; }
+.context-controls p { margin: 8px 0; }
+.memory-option { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.memory-option input { width: auto; flex-shrink: 0; }
+.workspace-context { display: grid; gap: 6px; overflow-wrap: anywhere; }
+.workspace-context ul { padding-left: 20px; }
 .msg { display: flex; gap: 10px; }
 .msg-role {
   flex: 0 0 30px; height: 30px; border-radius: 8px;
@@ -368,6 +381,10 @@ select:focus-visible {
 .execution-action { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 10px 0; }
 .approval-pending { border: 2px solid #857247; }
 .execution-action pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; padding: 10px; background: rgba(127,127,127,.08); border-radius: 6px; font-size: 12px; }
+.settings-table { table-layout: fixed; }
+.settings-table th { width: 78px; }
+.settings-table th, .settings-table td { overflow-wrap: anywhere; }
+@media (max-width: 760px) { .settings-table { display: table; overflow: visible; white-space: normal; } }
 .execution-path { overflow-wrap: anywhere; }
 .change-preview { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
 .change-preview h3 { font-size: 12px; margin: 10px 0 0; }
