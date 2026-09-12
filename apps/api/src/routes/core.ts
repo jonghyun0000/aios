@@ -6,6 +6,7 @@ import type { AppContext } from "../context.js";
 import { requireRole } from "../auth.js";
 import { enqueueIndexJob } from "../queue.js";
 import { registerWorkspaceRoutes } from "./workspace.js";
+import { validateIndexRoot } from "../index-boundary.js";
 
 /** 세션/프로젝트/검색/메모리/모델/사용량/빌링 — CRUD성 라우트 모음 */
 export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -23,11 +24,11 @@ export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void 
   });
 
   app.post("/v1/projects/:id/index", async (req, reply) => {
+    requireRole(req.auth, "member");
     const { id } = req.params as { id: string };
     const body = z.object({ rootDir: z.string() }).parse(req.body);
-    const owned = await ctx.pool.query(`select 1 from projects where id = $1 and org_id = $2`, [id, req.auth.orgId]);
-    if (owned.rowCount === 0) throw new NotFoundError("project");
-    const jobId = await enqueueIndexJob(ctx, { projectId: id, rootDir: body.rootDir, orgId: req.auth.orgId });
+    const rootDir = await validateIndexRoot(ctx, id, req.auth.orgId, body.rootDir);
+    const jobId = await enqueueIndexJob(ctx, { projectId: id, rootDir, orgId: req.auth.orgId });
     return reply.status(202).send({ jobId });
   });
 
@@ -50,6 +51,7 @@ export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void 
   });
 
   app.post("/v1/memory", async (req) => {
+    requireRole(req.auth, "member");
     const body = z
       .object({
         kind: z.enum(["fact", "preference", "decision"]),
@@ -65,6 +67,7 @@ export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void 
   });
 
   app.delete("/v1/memory/:id", async (req) => {
+    requireRole(req.auth, "member");
     const { id } = req.params as { id: string };
     const deleted = await ctx.memory.ltm.forget(id, req.auth.orgId);
     if (!deleted) throw new NotFoundError("memory item");

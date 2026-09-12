@@ -17,10 +17,11 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerLocalOperationsRoutes } from "./routes/local-operations.js";
 import { registerWs } from "./ws.js";
 import { registerCollabWs } from "./collab-ws.js";
+import { safeLoggerOptions } from "./safe-logging.js";
 
 export async function buildServer(ctx: AppContext) {
   const app = Fastify({
-    logger: { level: ctx.env.NODE_ENV === "production" ? "info" : "debug" },
+    logger: safeLoggerOptions(ctx.env.NODE_ENV === "production" ? "info" : "debug"),
     bodyLimit: 2 * 1024 * 1024,
   });
 

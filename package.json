@@ -13,6 +13,10 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "demo": "pnpm --filter @aios/demo dev --host 127.0.0.1",
+    "build:demo": "pnpm --filter @aios/demo build",
+    "doctor": "node scripts/doctor.mjs",
+    "test:doctor": "node --test scripts/doctor.test.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "verify": "node scripts/verify-all.mjs"
   },

@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 
 const mocks = vi.hoisted(() => ({ authenticate: vi.fn(), close: vi.fn(), quit: vi.fn() }));
-vi.mock("../auth.js", () => ({ authenticate: mocks.authenticate }));
+vi.mock("../auth.js", async (original) => ({ ...await original<typeof import("../auth.js")>(), authenticate: mocks.authenticate }));
 vi.mock("@aios/collab", () => ({
   PostgresDocPersistence: vi.fn(),
   RoomManager: vi.fn(() => ({
@@ -16,7 +16,7 @@ import { registerCollabWs } from "../collab-ws.js";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.authenticate.mockResolvedValue({ orgId: "org", userId: "user" });
+  mocks.authenticate.mockResolvedValue({ orgId: "org", userId: "user", role: "member" });
   mocks.close.mockResolvedValue(undefined);
   mocks.quit.mockResolvedValue("OK");
 });

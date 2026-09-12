@@ -25,7 +25,7 @@ export class Indexer {
     private embed: EmbedFn,
   ) {}
 
-  async indexProject(projectId: string, rootDir: string, onProgress?: ProgressFn): Promise<{
+  async indexProject(projectId: string, rootDir: string, onProgress?: ProgressFn, validateFile?: (path: string) => Promise<void>): Promise<{
     added: number;
     updated: number;
     removed: number;
@@ -33,6 +33,8 @@ export class Indexer {
     // 1) .gitignore 존중한 파일 수집
     const ig = ignoreFactory();
     ig.add([".git", "node_modules", "dist", "build", ".next", "coverage", "*.lock"]);
+    // 권한 검증 실패는 아래의 '없는 .gitignore' 처리로 삼키지 않는다.
+    await validateFile?.(join(rootDir, ".gitignore"));
     try {
       ig.add(await readFile(join(rootDir, ".gitignore"), "utf8"));
     } catch {
@@ -51,6 +53,7 @@ export class Indexer {
 
     const toIndex: { path: string; content: string; sha: string }[] = [];
     for (const f of files) {
+      await validateFile?.(join(rootDir, f));
       const content = await readFile(join(rootDir, f), "utf8").catch(() => null);
       if (content === null) continue;
       seen.add(f);

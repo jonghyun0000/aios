@@ -37,12 +37,13 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
   const running = sessionLocks(ctx);
 
   app.post("/v1/sessions/:id/messages", async (req, reply) => {
+    // 도구를 끈 대화도 메시지를 저장하고 모델 비용을 발생시킨다. viewer는 읽기만 허용한다.
+    requireRole(req.auth, "member");
     const { id: sessionId } = req.params as { id: string };
     const parsed = BodySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("invalid body", parsed.error.issues);
     const body = parsed.data;
     if (body.tools.enabled) {
-      requireRole(req.auth, "member");
       if (!ctx.env.LOCAL_WORKSPACE_ROOT) throw new ValidationError("안전 실행용 LOCAL_WORKSPACE_ROOT가 필요합니다. 도구를 끄거나 작업 폴더를 설정해 주세요.");
       await executionService(ctx).assertOrg(req.auth.orgId);
     }

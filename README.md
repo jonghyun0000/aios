@@ -8,6 +8,16 @@ Ollama 기반 로컬 모델로 외부 AI API 키 없이 주요 작업 흐름을 
 
 `TypeScript` · `React` · `Fastify` · `PostgreSQL / pgvector` · `Redis / BullMQ` · `Yjs` · `Ollama` · `Docker`
 
+## 설치 없이 살펴보기
+
+**[AIOS 공개 체험판 열기 ↗](https://aios-demo-mu.vercel.app)**
+
+별도 공개 체험판은 **자료 확인 → 변경 제안 → 승인/거절 → 검증 → 복구/충돌** 흐름을 가상 문서로 보여줍니다.
+실제 AI 응답이나 파일 실행이 아니며, 로컬 AIOS 서버·개인 파일·API 키에 연결하지 않습니다. 입력과 변경은 현재 탭의 메모리에만 남고 초기화/새로고침하면 사라집니다.
+
+소스를 복제한 뒤 `pnpm install --frozen-lockfile`, `pnpm run doctor --demo`, `pnpm demo`로 체험판만 실행할 수도 있습니다. Docker·Ollama·T7 설정은 필요하지 않습니다.
+[체험판의 범위와 배포 검증](docs/24-public-demo.md) · [처음 설치하는 사람의 안내](docs/23-getting-started.md) · [냉정한 평가표와 100점 수용 조건](docs/22-project-scorecard.md)
+
 ## 핵심 흐름
 
 | 단계 | 사용자가 확인하는 것 |
@@ -22,7 +32,7 @@ Ollama 기반 로컬 모델로 외부 AI API 키 없이 주요 작업 흐름을 
 
 ## 현재 실행 범위
 
-현재 직접 사용판은 **macOS + T7 + Colima/Docker + Ollama** 설정에 맞춰져 있습니다. 웹에 공개 배포된 서비스가 아니며, 복제만으로 데이터·모델·비밀 설정이 설치되지는 않습니다.
+현재 실제 AI·파일 작업을 하는 직접 사용판은 **macOS + T7 + Colima/Docker + Ollama** 설정에 맞춰져 있습니다. 공개 체험판과 별개인 로컬 제품이며, 복제만으로 데이터·모델·비밀 설정이 설치되지는 않습니다.
 GitHub에는 소스·설정 예제·문서·테스트만 올립니다. 대화 DB, 작업 파일, 백업, 모델, API 키는 포함하지 않습니다.
 
 **이 Mac에서 직접 사용:** T7를 연결하고 프로젝트 폴더의 **AIOS 시작.command**를 더블클릭하세요.
@@ -64,11 +74,16 @@ Prompt Router / Memory Engine(STM+LTM) / Tool Calling / MCP / RAG / 실시간 �
 | [docs/19-stage3-execution-safety.md](docs/19-stage3-execution-safety.md) | 3단계 — 실행 증거·건별 승인·파일 체크포인트 복구 |
 | [docs/20-stage4-local-operations.md](docs/20-stage4-local-operations.md) | 4단계 — 안전한 기동·종료·통합 백업·격리 복원 검사 |
 | [docs/21-github-main-project.md](docs/21-github-main-project.md) | 공개 저장소의 범위·개발 기준·CI와 로컬 검증 구분 |
+| [docs/22-project-scorecard.md](docs/22-project-scorecard.md) | 고정 배점의 평가·개선 근거·100점까지 남은 조건 |
+| [docs/23-getting-started.md](docs/23-getting-started.md) | 체험판/전체 앱 준비물과 읽기 전용 설치 진단 |
+| [docs/24-public-demo.md](docs/24-public-demo.md) | 공개 체험판·배포 경계·브라우저 검증 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) / [SECURITY.md](SECURITY.md) | 기여·재사용 권한 상태·비공개 보안 제보 |
 
 ## 구조
 
 ```
 apps/api            # Fastify API + SSE 채팅 + WS 협업 + BullMQ 워커 + health/metrics
+apps/demo           # 외부 API 없이 동작하는 공개 체험판 (가상 파일·모의 응답)
 apps/cli            # aios CLI (login/chat/index/search)
 apps/verify         # 실기동 검증 하네스 21단계 + eval(품질 회귀) 스위트
 apps/web            # React+Vite 웹 UI + Playwright e2e
@@ -114,7 +129,7 @@ pnpm verify local-ops                    # T7/macOS 운영 결함 주입 검사
 cd apps/verify && REPEATS=5 pnpm eval    # 품질 회귀 측정 (신뢰구간 포함)
 ```
 
-GitHub CI는 이 로컬 환경 전체를 재현하지 않습니다. 자동 배포·모델 호출·이미지 공개 없이, 소스 정적 검사와 빌드 및 머신 독립 단위 검사를 수행합니다.
+GitHub CI는 이 로컬 환경 전체를 재현하지 않습니다. 자동 배포·모델 호출·이미지 공개 없이, 소스 정적 검사·빌드·머신 독립 단위 검사와 별도 공개 체험판의 데스크톱/모바일 브라우저 검사를 수행합니다. 체험판 통과는 실제 DB·LLM·파일 실행 통과가 아닙니다.
 인자 없는 전체 검증에는 이미지·컨테이너·테스트 DB를 정리하는 구형 배포 시험이 포함되어 있어 사용자 데이터가 있는 환경에서는 먼저 범위를 확인해야 합니다.
 
 최근 전체 실행: **20 PASS / 0 FAIL / 1 SKIP** (2026-09-07). SKIP 은 `ANTHROPIC_API_KEY` 전용 단계다.

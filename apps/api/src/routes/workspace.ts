@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { NotFoundError, ValidationError } from "@aios/shared";
 import type { AppContext } from "../context.js";
 import { sessionLocks, validateReference } from "../workspace.js";
+import { requireRole } from "../auth.js";
 
 const idSchema = z.string().uuid();
 const titleSchema = z.string().trim().min(1).max(200);
@@ -12,6 +13,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, ctx: AppContext): 
     if (!result.rows.length) throw new NotFoundError("project");
   };
   app.post("/v1/sessions", async (req) => {
+    requireRole(req.auth, "member");
     const body = z.object({ projectId: idSchema.optional(), title: titleSchema.optional() }).parse(req.body ?? {});
     if (body.projectId) await ownedProject(body.projectId, req.auth.orgId);
     const { rows } = await ctx.pool.query("insert into sessions (org_id, user_id, project_id, title) values ($1,$2,$3,$4) returning id", [req.auth.orgId, req.auth.userId ?? null, body.projectId ?? null, body.title ?? null]);
@@ -52,6 +54,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, ctx: AppContext): 
 
   // 변경은 동일 대화 전송과 직렬화한다. 프로젝트 파일 수는 DB 행 잠금으로 다른 대화와도 직렬화한다.
   app.patch("/v1/sessions/:id", async (req, reply) => {
+    requireRole(req.auth, "member");
     const id = idSchema.parse((req.params as { id: string }).id);
     const body = z.object({ title: titleSchema.optional(), projectId: idSchema.nullable().optional(), deleted: z.boolean().optional() }).strict().parse(req.body);
     const locks = sessionLocks(ctx);
@@ -70,6 +73,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, ctx: AppContext): 
   });
 
   app.post("/v1/sessions/:id/files", { bodyLimit: 400_000 }, async (req, reply) => {
+    requireRole(req.auth, "member");
     const id = idSchema.parse((req.params as { id: string }).id);
     const body = z.object({ name: z.string().min(1).max(180), content: z.string().max(65536), scope: z.enum(["session", "project"]).default("session") }).parse(req.body);
     validateReference(body.name, body.content);
@@ -94,6 +98,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, ctx: AppContext): 
   });
 
   app.delete("/v1/sessions/:id/files/:fileId", async (req, reply) => {
+    requireRole(req.auth, "member");
     const { id, fileId } = z.object({ id: idSchema, fileId: idSchema }).parse(req.params);
     const locks = sessionLocks(ctx);
     if (locks.has(id)) return reply.code(409).send({ error: { code: "session_busy", message: "응답이 끝난 뒤 파일 연결을 해제해 주세요." } });

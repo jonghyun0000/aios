@@ -16,17 +16,17 @@ const ID = /^release-\d{8}T\d{6}Z-[a-f0-9]{8}$/;
 const MAX_FILE = 32 * 1024 ** 2;
 const MAX_TOTAL = 128 * 1024 ** 2;
 const MAX_FILES = 10_000;
-const APPS = ["api", "web", "cli", "verify"];
+const APPS = ["api", "web", "cli", "verify", "demo"];
 const PACKAGES = ["ai", "collab", "indexer", "memory", "plugin-host", "sdk", "shared", "tools"];
 const TOP = new Set([
   "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json", "tsconfig.json", "turbo.json",
   "vitest.shared.ts", "eslint.config.js", "docker-compose.yml", ".env.example", ".npmrc", ".gitignore", ".gitattributes",
-  "AGENTS.md", "CLAUDE.md", "HANDOFF.md", "README.md", "처음 사용하기.md", "aios-chat.html",
+  "AGENTS.md", "CLAUDE.md", "HANDOFF.md", "README.md", "CONTRIBUTING.md", "SECURITY.md", "처음 사용하기.md", "aios-chat.html", "vercel.json", ".vercelignore",
   "AIOS 시작.command", "AIOS 종료.command", "AIOS 상태 확인.command", "AIOS 백업.command",
   "AIOS 복원 검사.command", "AIOS 사용 패키지 만들기.command",
 ]);
 const TREES = [
-  ...APPS.flatMap(name => [`apps/${name}/src`]), "apps/web/e2e", "apps/web/public",
+  ...APPS.flatMap(name => [`apps/${name}/src`]), "apps/web/e2e", "apps/web/public", "apps/demo/public", "apps/demo/e2e",
   ...PACKAGES.flatMap(name => [`packages/${name}/src`, `packages/${name}/scripts`]), "extensions/vscode/src", "plugins/hello-world",
   "infra", "scripts", "docs", "tools/bigdata", ".github/workflows",
 ];

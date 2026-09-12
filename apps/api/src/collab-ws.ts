@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { PostgresDocPersistence, RoomManager, type Peer } from "@aios/collab";
+import { ForbiddenError } from "@aios/shared";
 import type { AppContext } from "./context.js";
-import { authenticate } from "./auth.js";
+import { authenticate, requireRole } from "./auth.js";
 
 /**
  * 실시간 협업 WebSocket 엔드포인트.
@@ -66,11 +67,14 @@ export async function registerCollabWs(app: FastifyInstance, ctx: AppContext): P
     let userId: string;
     try {
       const auth = await authenticate(ctx, req);
+      // Yjs sync step2도 문서를 변경한다. 읽기 전용 프로토콜을 구현하기 전에는
+      // viewer를 룸에 참가시키지 않는다(읽기 전용 협업을 지원한다는 뜻은 아니다).
+      requireRole(auth, "member");
       orgId = auth.orgId;
       // API 키 인증에는 사람 주체가 없다. awareness 표시용이므로 대체 라벨을 쓴다.
       userId = auth.userId ?? `apikey:${orgId}`;
-    } catch {
-      ws.close(4401, "unauthorized");
+    } catch (err) {
+      ws.close(err instanceof ForbiddenError ? 4403 : 4401, err instanceof ForbiddenError ? "member role required" : "unauthorized");
       return;
     }
 

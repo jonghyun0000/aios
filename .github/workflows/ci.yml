@@ -43,10 +43,17 @@ jobs:
           pnpm --filter @aios/api exec vitest run
           --exclude 'src/__tests__/checkpoints.test.ts'
           --exclude 'src/__tests__/local-operations.test.ts'
+      - name: Read-only doctor and public demo policy tests
+        run: node --test scripts/doctor.test.mjs scripts/public-demo-policy.test.mjs
+      - name: Install Chromium for isolated public demo
+        run: pnpm --filter @aios/web exec playwright install --with-deps chromium
+      - name: Public demo browser regression
+        run: node scripts/verify-public-demo.mjs
       # 위 두 API 파일은 /Volumes/T7의 실제 fixture를 생성하므로 Linux runner에서는 제외한다.
       # 패키지 이름으로 고른다. 경로 glob은 macOS NFD 한글 경로에서 조용히 0개를 고를 수 있다.
       # 경로 문자열만 검증하거나 HTTP/DB를 대역으로 쓰는 나머지 API 단위검사는 포함한다.
       # scripts/local-*.test.mjs도 Mac/T7/로컬 프로세스 전용이다.
-      # DB 마이그레이션·Docker sandbox·Playwright 실기동·Ollama eval·통합 백업/복원은
+      # 위 브라우저 검사는 독립 정적 데모만 검사한다. 실제 AIOS 앱의 브라우저 검사,
+      # DB 마이그레이션·Docker sandbox·Ollama eval·통합 백업/복원은
       # 이 CI의 PASS 범위가 아니다. 전용 로컬 검증 결과는 docs/20-stage4-local-operations.md를 참조한다.
       # 이전 자동 배포 예제는 docs/examples/legacy-ci-deploy.yml로 옮겼으며 비활성 상태다.

@@ -2,6 +2,8 @@ import { Worker } from "bullmq";
 import { createContext } from "./context.js";
 import { enqueueMemoryJob, type IndexJobData, type MemoryJobData } from "./queue.js";
 import { closeWorkersThenContext } from "./shutdown.js";
+import { runIndexJob } from "./index-boundary.js";
+import { safeErrorSummary } from "./safe-logging.js";
 
 /**
  * 백그라운드 워커 프로세스 — api와 같은 코드베이스, 다른 엔트리포인트.
@@ -16,8 +18,8 @@ async function main() {
   const indexWorker = new Worker<IndexJobData>(
     "index",
     async (job) => {
-      const { projectId, rootDir, orgId } = job.data;
-      const result = await ctx.indexer.indexProject(projectId, rootDir, (p) => {
+      const { projectId, orgId } = job.data;
+      const result = await runIndexJob(ctx, job.data, (p) => {
         void job.updateProgress(Math.round((p.done / Math.max(p.total, 1)) * 100));
         void ctx.bus.publish({ type: "index.progress", orgId, payload: { projectId, ...p } });
       });
@@ -56,7 +58,7 @@ async function main() {
   });
 
   for (const w of [indexWorker, memoryWorker]) {
-    w.on("failed", (job, err) => log("job.failed", { queue: w.name, id: job?.id, err: err.message }));
+    w.on("failed", (job, err) => log("job.failed", { queue: w.name, id: job?.id, error: safeErrorSummary(err) }));
   }
 
   let shuttingDown = false;
@@ -88,6 +90,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(JSON.stringify({ event: "worker.start_failed", error: safeErrorSummary(err) }));
   process.exit(1);
 });

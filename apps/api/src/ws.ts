@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import type { AuthContext } from "@aios/shared";
 import type { AppContext } from "./context.js";
-import { authenticate } from "./auth.js";
+import { authenticate, requireRole } from "./auth.js";
 
 /**
  * WebSocket — 이벤트 구독 + 실시간 협업(Yjs relay).
@@ -49,14 +50,14 @@ export async function registerWs(app: FastifyInstance, ctx: AppContext): Promise
     // WS는 커스텀 헤더가 불가한 클라이언트가 많아 query token 허용
     const token = (req.query as { token?: string }).token;
     if (token) req.headers.authorization = `Bearer ${token}`;
-    let orgId: string;
+    let auth: AuthContext;
     try {
-      const auth = await authenticate(ctx, req);
-      orgId = auth.orgId;
+      auth = await authenticate(ctx, req);
     } catch {
       socket.close(4401, "unauthorized");
       return;
     }
+    const { orgId } = auth;
 
     const client: WsClient = { socket, orgId, channels: new Set() };
     clients.add(client);
@@ -64,7 +65,12 @@ export async function registerWs(app: FastifyInstance, ctx: AppContext): Promise
     socket.on("message", (raw: Buffer) => {
       let msg: { t: string; ch?: string; doc?: string; u?: string };
       try {
-        msg = JSON.parse(raw.toString());
+        const parsed: unknown = JSON.parse(raw.toString());
+        // JSON 파싱 성공은 프레임 형식 검증이 아니다. null/배열/객체 필드로 콜백이 죽거나
+        // 채널 이름이 암묵적으로 변환되지 않도록 필요한 문자열만 허용한다.
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !("t" in parsed) || typeof parsed.t !== "string") return;
+        if (["ch", "doc", "u"].some((key) => key in parsed && typeof (parsed as Record<string, unknown>)[key] !== "string")) return;
+        msg = parsed as typeof msg;
       } catch {
         return;
       }
@@ -84,6 +90,13 @@ export async function registerWs(app: FastifyInstance, ctx: AppContext): Promise
           break;
         case "collab.update":
           if (msg.doc && msg.u) {
+            // 연결/구독은 viewer에게 필요한 읽기 기능이다. 구형 릴레이도 쓰기 프레임만
+            // member 이상으로 제한하고, 거부하더라도 기존 이벤트 구독은 유지한다.
+            try { requireRole(auth, "member"); }
+            catch {
+              socket.send(JSON.stringify({ t: "error", code: "forbidden", message: "member role required" }));
+              break;
+            }
             void publish(orgId, `collab:${msg.doc}`, { t: "collab.update", doc: msg.doc, u: msg.u });
           }
           break;

@@ -1,5 +1,6 @@
 import { createContext } from "./context.js";
 import { buildServer } from "./server.js";
+import { safeErrorSummary } from "./safe-logging.js";
 
 /**
  * API 서버 엔트리포인트.
@@ -44,6 +45,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(JSON.stringify({ event: "api.start_failed", error: safeErrorSummary(err) }));
   process.exit(1);
 });

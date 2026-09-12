@@ -10,11 +10,25 @@ test("대화 본문 검색·이름 변경·휴지통·새로고침 후 복구", 
   await login(page); await goRoute(page, "/chat");
   const marker = `찾을본문-${Date.now()}`;
   // 모델을 기다리지 않는 정확 계산으로 본문이 DB에 실제 저장되게 한다.
+  const created = page.waitForResponse((response) => new URL(response.url()).pathname === "/v1/sessions" && response.request().method() === "POST");
   await page.getByLabel("메시지 입력").fill("17*23+41"); await page.getByLabel("메시지 입력").press("Enter");
+  const createdResponse = await created;
+  expect(createdResponse.ok()).toBe(true);
+  const { id } = await createdResponse.json() as { id: string };
+  expect(id).toMatch(/^[0-9a-f-]{36}$/);
+  // 같은 제목의 사용자 대화가 이미 있어도 이번에 생성한 ID만 변경한다.
+  // 선택자 회귀가 생겨도 실제 PATCH가 사용자 대화에 도달하지 않게 한 번 더 막는다.
+  await page.route("**/v1/sessions/*", (route) => {
+    if (route.request().method() === "PATCH" && new URL(route.request().url()).pathname !== `/v1/sessions/${id}`) return route.abort("blockedbyclient");
+    return route.continue();
+  });
   await expect(page.locator(".messages")).toContainText("432"); await expect(page.getByLabel("메시지 입력")).toBeEnabled();
+  await expect(page).toHaveURL(new RegExp(`#/chat/${id}$`));
   const url = page.url();
   const list = await history(page);
-  await list.getByRole("button", { name: "17*23+41 대화 관리", exact: true }).first().click();
+  const row = list.locator(".session-row").filter({ has: page.locator(`a[href="#/chat/${id}"]`) });
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: "17*23+41 대화 관리", exact: true }).click();
   await page.getByLabel("대화 이름").fill(marker); await page.getByRole("button", { name: "이름 저장" }).click();
   await list.getByLabel("대화 검색").fill(marker);
   await expect(list.getByRole("link", { name: marker, exact: true })).toHaveCount(1);

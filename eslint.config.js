@@ -98,7 +98,7 @@ export default tseslint.config(
     // exhaustive-deps를 켜는 이유는 스타일이 아니라 버그다 — 의존성을 빠뜨리면
     // 클로저가 낡은 상태를 붙잡아 "가끔 예전 값이 보이는" 재현 어려운 문제가 된다.
     // 다만 error가 아니라 warn으로 두면 --max-warnings=0에서 어차피 실패하므로 error로 둔다.
-    files: ["apps/web/**/*.{ts,tsx}"],
+    files: ["apps/web/**/*.{ts,tsx}", "apps/demo/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
