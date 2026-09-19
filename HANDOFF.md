@@ -13,7 +13,8 @@
 - **이번 후속 작업 완료:** 운영 이미지 Node/pnpm 정렬·컨텍스트 보호. 실제 격리 기동/인증/종료, 정적4·단위464·추가회귀10 통과. 인계 원문101줄 보존 확인. 범위·경고·실패 기록은 [docs/30-container-build.md](docs/30-container-build.md).
 - **남은 P0:** tmpdir 실경로 하네스, 잘못된 UUID/연결 종료 오류 분류, e2e 서버 전제, pnpm 없는 시작기 안내(NEXT_STEPS 1-2~1-5).
 - **공개 상태:** GitHub `jonghyun0000/aios`; 체험판 `https://aios-demo-mu.vercel.app`은 가상 응답/파일만 쓰는 별도 정적 앱이다. push가 체험판을 재배포하지 않는다.
-- **미승인:** Claude 커밋과 이번 수정의 push·원격 CI·Vercel 재배포는 아직 하지 않는다. 공개 변경 전에 사용자에게 확인한다.
+- **공개 반영(2026-09-20):** 사용자 승인으로 `15218c0`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35476338497)가 성공했다. Vercel 재배포는 미실행이다.
+- **현재 기동 차단:** Colima의 T7 공유가 `bad file descriptor`로 실패한다. 재시작은 DB/Redis 중단이 있어 승인 대기. 기존 통계 DB 범위와 새 자료 활용 준비는 [docs/31](docs/31-bigdata-connection.md)에 기록했다.
 - **점수:** 기존 90/100은 당시 AI 자체 평가(`docs/22`). 별도 약70±6 의견과 근거 한계는 NEXT_STEPS §1에 있다. 이번 작업으로 점수를 올리지 않는다.
 - **전제 변경:** M1 Air 판매로 두 번째 Mac이 없다. 다른 Mac 설치 근거는 미충족으로 두고 같은 Mac/CI 결과로 대체 가산하지 않는다.
 - **안전 경계:** 사용자 DB·작업 파일·설정 보존. phase8/legacy-full/운영 복원·과거 볼륨 삭제 금지. 새 시험 자원만 정확한 ID로 정리한다.
@@ -189,9 +190,10 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 27 | 4단계 복원·배포 | 새 DB/폴더의 격리 검사만 수행. 운영본 전환/경로 메타데이터 재매핑/다른 Mac 설치/키 복구/강제 전원 차단 검증 미수행. 재설치 패키지는 의존성·설정·모델이 별도인 소스 묶음 |
 | 28 | 4단계 실패 보존·보안 | 불확실한 DB 작업 종료 시 maintenance.lock을 보존한다. 자동 삭제 금지. HMAC 키 없으면 복원 불가; 키·백업 모두 변조 가능한 로컬 사용자 방어는 아님. 실패 .partial/복원 DB·폴더는 남아 용량 관리 필요 |
 | 29 | 의존성 감사 게이트 범위 | high 이상·프로덕션 의존성만 차단. moderate/low·개발 전용은 통과. `pnpm audit` 는 npm 권고 서비스 가용성에 의존. 권고의 실제 악용 시험은 하지 않았다 |
-| 30 | **운영 이미지 빌드 불가 — 수정·격리 기동 검증 완료(2026-09-19)** | 기존 Node20/engines22 충돌을 clean HEAD에서 재현한 뒤 Node22·pnpm9.12.0으로 정렬했다. 실제 api 이미지 빌드·격리 `/healthz`/`readyz` 200·인증 401·일반 사용자 실행·종료0, 버전 계약 결함 주입과 Docker 컨텍스트 제외 시험 확인. CI에는 정적 버전 계약만 추가했으며 원격은 push 승인 전 미실행. msgpackr 선택 네이티브 경고/가속 미사용은 남고 worker·migrate·amd64·실제 모델은 이번 범위 밖이다. 원인/실패/근거: `docs/30-container-build.md` |
+| 30 | **운영 이미지 빌드 불가 — 수정·격리 기동 검증 완료(2026-09-19)** | 기존 Node20/engines22 충돌을 clean HEAD에서 재현한 뒤 Node22·pnpm9.12.0으로 정렬했다. 실제 api 이미지 빌드·격리 `/healthz`/`readyz` 200·인증 401·일반 사용자 실행·종료0, 버전 계약 결함 주입과 Docker 컨텍스트 제외 시험 확인. CI에는 정적 버전 계약만 추가했으며 2026-09-20 `15218c0` 원격 CI audit·verify 성공. msgpackr 선택 네이티브 경고/가속 미사용은 남고 worker·migrate·amd64·실제 모델은 이번 범위 밖이다. 원인/실패/근거: `docs/30-container-build.md` |
 | 31 | 검증 하네스 ↔ 도구 jail 충돌(macOS) | `packages/tools/src/builtin/fs.ts:48` 은 `realpath(root) !== root` 이면 "workspace root must not contain symbolic links" 로 거부한다. macOS `tmpdir()` 는 항상 `/var/…`(→`/private/var`) 심볼릭 경로라 `mkdtemp(tmpdir())` 로 루트를 만드는 하네스가 걸린다. **phase7 이 `TMPDIR` 미정규화 시 34/35 로 실패**(주입 방어 시험이 도구 오류를 받고 답을 못 함). `TMPDIR=$(node -p 'require("fs").realpathSync(require("os").tmpdir())')` 로 정규화하면 PASS. 다른 하네스(phase4·5·6, s2-scenario)도 같은 패턴이 있을 수 있다 — 미점검 |
 | 32 | API 오류 분류 잡음 | (a) 클라이언트가 응답 전에 연결을 끊으면(화면 전환) 서버가 `unhandled error`(level 50)를 남긴다 — bigdata 조회에서 재현·통제군 확인. (b) 형식이 잘못된 UUID 경로(`/v1/sessions/undefined/messages`)가 400/404 가 아니라 **500 `internal`** 이다. 둘 다 `server.ts` 의 `setErrorHandler` 가 `AiosError`/`ZodError` 만 분류하기 때문 — 진짜 장애와 구분되지 않는다. 사용자 영향은 확인하지 못했고 Fastify 버전과 무관한 앱 로직으로 판단하지만, 4.x 에서의 재현은 하지 않았다 |
+| 33 | Colima T7 공유 연결 실패(2026-09-20) | 호스트 폴더·공유 설정은 존재하지만 VM의 stat과 시작기의 bind probe가 `bad file descriptor`로 실패한다. API는 시작되지 않았고 DB/Redis/Ollama만 정상. 공유 서비스 중단을 수반하는 Colima 재시작은 사용자 승인 대기. 통계 자료 원본 손상으로 단정하지 않는다. 근거와 데이터 적용 범위는 `docs/31-bigdata-connection.md` |
 
 ---
 
