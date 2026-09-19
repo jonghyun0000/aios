@@ -7,9 +7,10 @@
 
 ## 0. 30초 요약
 
+- **전제 변경(2026-09-19): 두 번째 Mac(M1 Air)을 판매했다.** 다른 Mac 에서의 설치·복원 검증은 할 수 없다. 대체 근거와 다음 작업의 순서·방법은 **[NEXT_STEPS.md](NEXT_STEPS.md)** 를 따른다.
 - **최신 — 프로덕션 의존성 취약점 15건 → 0건(2026-09-19):** Fastify 4→5, `@fastify/static`·cookie·cors·websocket 동반 상승, fast-uri 락파일 재해석. 게이트 `pnpm run audit:prod`(CI 별도 job + 주간 스케줄). 근거·한계: `docs/08-security.md` §15.5.
   **업그레이드가 조용히 바꾼 동작 2건을 잡아 고쳤다**(CORS 기본 methods 축소, static `setHeaders` 인자 변경) — 회귀 시험 14건 추가, 결함 주입으로 실패 확인. 정적 4단계 PASS(unit 464), 실서버 7단계·보안 PASS, 브라우저 e2e 123/3skip/0fail(키 없는 서버 기준).
-  **같은 점검에서 이번 변경과 무관한 기존 결함 3건을 발견했다 — 아래 §7 위험 30(운영 이미지 빌드 불가)·31·32.** 코드 변경은 커밋했지만 **푸시 전**이라 원격 CI(새 `audit` job 포함)는 아직 돌지 않았다.
+  **같은 점검에서 이번 변경과 무관한 기존 결함 3건을 발견했다 — 아래 §7 위험 30(운영 이미지 빌드 불가)·31·32.** 코드 변경은 커밋했지만 **푸시 전**이라 원격 CI(새 `audit` job 포함)는 아직 돌지 않았다 — NEXT_STEPS 0-1.
 - **최신 — 실제 제품의 기억·근거·실행 내구성·접근성 보완(2026-09-12):** 사용자는 다른 M1 Air 13인치/16GB/256GB에서 진행하기 전에 고정 평가표 90점 이상을 요구했다. 다른 Mac에는 접속하지 않았고 설치·독립 디스크 복원·신규 사용자/보조기기 관찰은 여전히 미검증이다.
   최근 사용자 메시지 최대500개에서 좁은 답변 선호 enum을 복원하고 초기화/기억 끄기를 지원한다. 자료는 한국어 조사·본문 일치·파일 간 분산으로 발췌하며 모델에 실제 전달된 파일·행만 표시한다. 현재 요청의 형식과 과거 일회성 형식을 분리하며 원문/모델 출력을 몰래 바꾸지 않는다.
   작업 폴더별 단일 API 소유권을 DB 연결 전에 강제하고 백업 유지보수와 상호 배제한다. 복구 중 파일 성공/DB 응답 실패 뒤 명시적 재시도를 지원하며, 다른 사람의 수동 변경은 보존한다. 다른 workspace의 API가 같은 DB를 공유하는 구성과 분산 실행은 지원하지 않는다.
@@ -228,24 +229,23 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 
 ---
 
-## 6. 다음 할 일 — 우선순위 순
+## 6. 다음 할 일
 
-0. **이제 AIOS가 주력 개발 프로젝트다.** `main` 커밋·공개 저장소 기준으로 변경을 관리한다. 공개/비밀 경계와 CI 범위는 `docs/21-github-main-project.md`.
-   4단계 로컬 운영 준비를 구현했다: 더블클릭 기동/종료/진단, 재설치용 소스 묶음, DB+workspace+체크포인트 통합 백업/격리 복원 검사. `docs/20-stage4-local-operations.md` 참고.
-   다음은 사용자 실제 사용 피드백 및 별도 디스크의 암호화 백업/운영본 복구·다른 Mac 이관 범위 결정이다. 외부 업로드나 기존 DB 교체는 사용자 승인 전 자동 수행하지 않는다.
-   3단계 승인·실행 근거·파일별 복구는 구현했다. `docs/19-stage3-execution-safety.md`의 한계(단일 API·읽기 전용 명령·64 KiB·호스트 동시 변경)를 반드시 유지한다.
-   2단계 검색/휴지통/참고자료/DB 맥락 복원은 구현했다. 범위와 검증은 `docs/18-stage2-daily-workspace.md`.
-   1단계 자동 계산은 39/39, 전체 148/150. 지정 언어 회상 오류 2건과 규칙 기반 분류·모델 재적재 지연은 남아 있다.
-   명시적 빠른 모드는 여전히 계산 오답을 낼 수 있다. 자동 또는 깊이 생각도 모든 문제의 정답을 보장하지 않는다.
-1. **프롬프트 자기 검증 규칙 재판정.** `SYSTEM_CORE_TEMPLATE`(`packages/ai/src/prompt.ts`)의 "고쳤으면 확인하라" 규칙은
-   현재 **효과 미입증**이다. 단 현재 eval 은 단일 턴·시스템 프롬프트 없이 돌기 때문에 **이 규칙을 잴 수 없다.**
-   필요한 것: `run.ts` 에 시스템 프롬프트 포함 옵션 + 도구 결과를 주고받는 **다중 턴 과제**(편집 후 테스트 재실행 여부 채점).
-2. **eval 을 `verify-all` 에 넣을지 결정** — 15~25분이라 매번 돌리기엔 무겁다. 별도 야간 실행이 무난.
-3. **bigdata 격리 완료 후 관찰** — 별도 프로세스와 실패 응답·재기동을 구현했다. 실제 자식 강제 종료 3회에서 API 생존·다음 조회 복구 확인.
-   exFAT 네이티브 충돌 자체의 원인을 해결한 것은 아니다.
-4. **대형 리포 인덱싱 측정** — 지금까지 최대 60파일/780청크. 실사용 규모(수만 파일)는 미측정.
-5. **실계정 검증(OAuth IdP·Stripe·타 프로바이더)** — 사용자 계정·키가 필요하다. 사용자에게 요청.
-6. **README·docs 갱신은 작업마다.** 이번 인수인계에서 README·`.env.example` 의 낡은 부분을 고쳤다.
+**순서·완료 기준·작업 방법은 [NEXT_STEPS.md](NEXT_STEPS.md) 로 옮겼다(2026-09-19).** 여기에 목록을 다시 적지 않는다. 두 곳에 두면 한쪽이 낡는다.
+
+예전 이 절의 항목이 어디로 갔는지:
+
+| 예전 항목 | NEXT_STEPS 위치 |
+|---|---|
+| 프롬프트 자기 검증 규칙 재판정(다중 턴 eval 필요) | 3-4 |
+| eval 을 verify-all 에 넣을지 결정 | 3-1 의 결과를 보고 결정 |
+| bigdata 격리 후 관찰(위험 14) | 단계 4 "계속 관찰" |
+| 대형 리포 인덱싱 측정 | 3-5 |
+| 실계정 검증(OAuth·Stripe·타 프로바이더) | 단계 4 |
+| 별도 디스크 백업·운영본 복구·다른 Mac 이관 | 2-3, §2(다른 Mac 은 불가) |
+| README·docs 는 작업마다 갱신 | §3.2 의 7번 |
+
+단계별 구현 범위의 요약(1~4단계)은 `docs/17`~`docs/20` 과 §0 에 있다. 각 단계의 한계(단일 API, 읽기 전용 명령, 64 KiB, 호스트 동시 변경 등)는 §7 위험 21~28 로 유지한다.
 
 ---
 
@@ -304,7 +304,7 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 기기가 이유 없이 느리고 부하 평균 10~19 | **tsx 가 띄운 esbuild 서비스(`--service=0.28.1 --ping`)가 부모 node 가 죽은 뒤 고아로 남아 헛돈다.** 2026-09-07 에 SIGBUS·`kill -9` 로 서버를 정리하면서 2개가 생겨 **4일 반 동안 각 CPU 340%**(코어 약 7개)를 먹었다. SIGTERM 도 무시한다 | 아래 §11 의 점검 명령. 부모가 launchd(PPID 1)인 esbuild 는 전부 고아다 |
 | e2e 가 `session.id` 가 `undefined` 라며 7건 실패, 서버 로그에 `/v1/sessions/undefined/messages` | e2e 스펙은 `request.post("/v1/sessions")` 를 **인증 헤더 없이** 부른다 — **키 없는 서버(`LOCAL_NO_AUTH=1`)를 전제**한다. `dev-up.sh` 서버는 키 인증이라 401 | 키 없는 서버에 붙인다: `LOCAL_NO_AUTH=1 PORT=8792 pnpm --filter @aios/api dev` 후 `AIOS_BASE_URL=http://127.0.0.1:8792`. 그러면 123 PASS/3 skip |
 | `AIOS 시작.command` 가 "시작기 작업 폴더를 확인할 수 없습니다" | 시작기가 자기 프로세스의 cwd 를 `lsof` 류로 확인해 저장소 루트와 비교한다(`scripts/local-lifecycle.mjs:228`). 에이전트 하네스 하위 프로세스에서는 통과하지 못했다 | 사용자의 Finder 더블클릭/일반 터미널에서 실행. 에이전트는 위 키 없는 서버를 직접 띄운다 |
-| `dev-up.sh` 가 "API 서버가 뜨지 않았다", 로그에 `nohup: pnpm: No such file or directory` | 셸의 PATH 에 corepack 셔임이 없다(에이전트 셸은 사용자 프로필을 다 읽지 않을 수 있다) | `AGENTS.md` 의 `export PATH="…:/usr/local/lib/node_modules/corepack/shims:$PATH"` 를 먼저 실행한다. 확인: `command -v pnpm` → `/usr/local/lib/node_modules/corepack/shims/pnpm`. |
+| `dev-up.sh` 가 "API 서버가 뜨지 않았다", 로그에 `nohup: pnpm: No such file or directory` | 셸의 PATH 에 corepack 셔임이 없다(에이전트 셸은 사용자 프로필을 다 읽지 않을 수 있다) | `AGENTS.md` 의 `export PATH="…:/usr/local/lib/node_modules/corepack/shims:$PATH"` 를 먼저 실행한다. 확인: `command -v pnpm` → `/usr/local/lib/node_modules/corepack/shims/pnpm`. dev-up.sh 가 이걸 먼저 알려 주게 고치는 일은 NEXT_STEPS 1-5 |
 | 서버를 종료했는데 `pnpm … dev` / `tsx` 프로세스가 남아 있음(ppid=1) | 리스너 PID 만 종료하면 부모 래퍼와 tsx 자식이 고아가 된다 | 리스너가 아니라 **`--filter @aios/api dev` 래퍼 PID** 를 SIGTERM. 이후 §11 점검(`ps` 로 `esbuild` ppid=1 확인) |
 | `git` 이 "You have not agreed to the Xcode license" 만 출력 | `/usr/bin/git` 셔임이 Xcode 라이선스 동의(sudo)를 요구 | `/Library/Developer/CommandLineTools/usr/bin/git` 를 직접 호출. GitHub 쪽은 `gh` |
 
