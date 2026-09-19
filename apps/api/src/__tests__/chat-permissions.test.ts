@@ -28,7 +28,7 @@ function fixture(role: AuthContext["role"], via: "api_key" | "session" = "sessio
   } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId, role, via, scopes: ["*"], ...(via === "session" ? { userId: "user" } : {}) }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: err.message }));
+  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
   registerChatRoutes(app, ctx);
   return { app, ctx, query, stream, record, publish, checkQuota, bind };
 }

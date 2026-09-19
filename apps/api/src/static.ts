@@ -37,9 +37,10 @@ export async function registerWebUi(app: FastifyInstance): Promise<boolean> {
     prefix: "/",
     // 해시가 붙은 자산은 내용이 바뀌면 이름이 바뀐다 → 영구 캐시가 안전하다.
     // index.html은 절대 캐시하지 않는다. 캐시되면 새 배포가 사용자에게 도달하지 않는다.
+    // @fastify/static v8+ 는 raw ServerResponse 가 아니라 FastifyReply 를 넘긴다(res.setHeader 없음).
     setHeaders(res, path) {
-      if (path.endsWith("index.html")) res.setHeader("cache-control", "no-cache");
-      else if (path.includes("/assets/")) res.setHeader("cache-control", "public, max-age=31536000, immutable");
+      if (path.endsWith("index.html")) res.header("cache-control", "no-cache");
+      else if (path.includes("/assets/")) res.header("cache-control", "public, max-age=31536000, immutable");
     },
   });
 

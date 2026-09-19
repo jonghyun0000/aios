@@ -70,7 +70,7 @@ describe("운영 기록 HTTP 접근 경계", () => {
   async function request(localMode: boolean, via: AuthContext["via"], role: AuthContext["role"], method: "GET" | "POST" = "GET") {
     const app = Fastify();
     app.addHook("preHandler", async (req) => { req.auth = { orgId: "org", scopes: ["*"], via, role }; });
-    app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: err.message }));
+    app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
     registerLocalOperationsRoutes(app, { env: { LOCAL_NO_AUTH: localMode } } as unknown as AppContext);
     try { return await app.inject({ method, url: "/v1/local/operations" }); } finally { await app.close(); }
   }

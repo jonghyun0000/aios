@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # 코드가 바뀌지 않아도 의존성에 새 권고가 공개된다. 푸시가 없는 주에도 audit job 이 돌게 한다.
+  schedule:
+    - cron: "17 3 * * 1"
 
 # 최초 공개 업로드는 코드 검증만 한다. 패키지 게시·클라우드 배포 권한을 주지 않는다.
 permissions:
@@ -15,6 +18,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 프로덕션 의존성의 알려진 취약점 게이트.
+  # 별도 job 인 이유: 코드는 그대로인데 새 권고 때문에 빨개지는 일이 생길 수 있다.
+  # 그때 "테스트가 깨졌다"와 "의존성 권고가 나왔다"가 한눈에 구분돼야 한다.
+  # high 이상만 막는다 — moderate/low 와 개발 전용 의존성까지 막으면 CI 가 상시 빨갛게 되어 무시하게 된다.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, Node 24 runtime
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      # 락파일만 읽으므로 install 이 필요 없다.
+      - name: Production dependency audit (high and above)
+        run: pnpm run audit:prod
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20

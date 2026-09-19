@@ -26,7 +26,7 @@ function fixture(role: "viewer" | "member" = "member") {
   const ctx = { env: { LOCAL_WORKSPACE_ROOT: root, LOCAL_NO_AUTH_ORG_SLUG: "local" }, pool: { query }, indexer: { indexProject } } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId: "org", role, via: "api_key", scopes: ["*"] }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: err.message }));
+  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
   registerCoreRoutes(app, ctx);
   return { app, ctx, query, indexProject };
 }

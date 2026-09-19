@@ -29,7 +29,11 @@ const app = Fastify();
 const me = await (await fetch(base + "/v1/me")).json() as { orgId: string };
 ctx.env.LOCAL_NO_AUTH_ORG_SLUG = (await pool.query("select slug from organizations where id=$1", [me.orgId])).rows[0].slug;
 app.addHook("preHandler", async (req) => { req.auth = { orgId: req.headers["x-test-org"] as string || me.orgId, role: req.headers["x-test-role"] === "viewer" ? "viewer" : "owner", scopes: ["*"], via: "local" }; });
-app.setErrorHandler((err, _req, reply) => { reply.code((err as { status?: number }).status ?? (err.name === "ZodError" ? 400 : 500)).send({ error: err.message }); });
+app.setErrorHandler((err, _req, reply) => {
+  // Fastify 5 는 err 를 unknown 으로 넘긴다 — 쓰는 필드만 좁혀서 읽는다.
+  const e = err as { status?: number; name?: string; message?: string };
+  reply.code(e.status ?? (e.name === "ZodError" ? 400 : 500)).send({ error: e.message });
+});
 registerExecutionRoutes(app, ctx);
 async function record(test: string, work: () => Promise<void>) {
   try { await work(); results.push({ test, pass: true }); }

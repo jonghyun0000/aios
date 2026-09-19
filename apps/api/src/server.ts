@@ -18,6 +18,7 @@ import { registerLocalOperationsRoutes } from "./routes/local-operations.js";
 import { registerWs } from "./ws.js";
 import { registerCollabWs } from "./collab-ws.js";
 import { safeLoggerOptions } from "./safe-logging.js";
+import { CORS_OPTIONS } from "./cors-options.js";
 
 export async function buildServer(ctx: AppContext) {
   const app = Fastify({
@@ -25,7 +26,7 @@ export async function buildServer(ctx: AppContext) {
     bodyLimit: 2 * 1024 * 1024,
   });
 
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, CORS_OPTIONS);
   await app.register(websocket);
   // OAuth 세션 쿠키(HttpOnly)를 읽고 쓰기 위해 필요
   await app.register(cookie);

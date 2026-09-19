@@ -12,7 +12,7 @@ function fixture(role: "viewer" | "member") {
   const ctx = { pool: { query, connect: async () => ({ query, release() {} }) }, memory: { ltm: { remember, forget } } } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId: "org", role, via: "session", scopes: ["*"] }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: err.message }));
+  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
   registerCoreRoutes(app, ctx);
   return { app, query, remember, forget };
 }

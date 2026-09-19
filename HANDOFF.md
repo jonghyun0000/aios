@@ -7,6 +7,9 @@
 
 ## 0. 30초 요약
 
+- **최신 — 프로덕션 의존성 취약점 15건 → 0건(2026-09-19):** Fastify 4→5, `@fastify/static`·cookie·cors·websocket 동반 상승, fast-uri 락파일 재해석. 게이트 `pnpm run audit:prod`(CI 별도 job + 주간 스케줄). 근거·한계: `docs/08-security.md` §15.5.
+  **업그레이드가 조용히 바꾼 동작 2건을 잡아 고쳤다**(CORS 기본 methods 축소, static `setHeaders` 인자 변경) — 회귀 시험 14건 추가, 결함 주입으로 실패 확인. 정적 4단계 PASS(unit 464), 실서버 7단계·보안 PASS, 브라우저 e2e 123/3skip/0fail(키 없는 서버 기준).
+  **같은 점검에서 이번 변경과 무관한 기존 결함 3건을 발견했다 — 아래 §7 위험 30(운영 이미지 빌드 불가)·31·32.** 코드 변경은 커밋했지만 **푸시 전**이라 원격 CI(새 `audit` job 포함)는 아직 돌지 않았다.
 - **최신 — 실제 제품의 기억·근거·실행 내구성·접근성 보완(2026-09-12):** 사용자는 다른 M1 Air 13인치/16GB/256GB에서 진행하기 전에 고정 평가표 90점 이상을 요구했다. 다른 Mac에는 접속하지 않았고 설치·독립 디스크 복원·신규 사용자/보조기기 관찰은 여전히 미검증이다.
   최근 사용자 메시지 최대500개에서 좁은 답변 선호 enum을 복원하고 초기화/기억 끄기를 지원한다. 자료는 한국어 조사·본문 일치·파일 간 분산으로 발췌하며 모델에 실제 전달된 파일·행만 표시한다. 현재 요청의 형식과 과거 일회성 형식을 분리하며 원문/모델 출력을 몰래 바꾸지 않는다.
   작업 폴더별 단일 API 소유권을 DB 연결 전에 강제하고 백업 유지보수와 상호 배제한다. 복구 중 파일 성공/DB 응답 실패 뒤 명시적 재시도를 지원하며, 다른 사람의 수동 변경은 보존한다. 다른 workspace의 API가 같은 DB를 공유하는 구성과 분산 실행은 지원하지 않는다.
@@ -271,6 +274,10 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 26 | 4단계 백업 위치·범위 | 같은 T7 백업은 디스크 고장/분실 대비가 아님. 모델/DuckDB/Parquet/Redis 큐/다른 workspace/비밀 설정 제외. DB·파일 내용은 민감할 수 있고 exFAT chmod는 기밀성 보장이 아님 |
 | 27 | 4단계 복원·배포 | 새 DB/폴더의 격리 검사만 수행. 운영본 전환/경로 메타데이터 재매핑/다른 Mac 설치/키 복구/강제 전원 차단 검증 미수행. 재설치 패키지는 의존성·설정·모델이 별도인 소스 묶음 |
 | 28 | 4단계 실패 보존·보안 | 불확실한 DB 작업 종료 시 maintenance.lock을 보존한다. 자동 삭제 금지. HMAC 키 없으면 복원 불가; 키·백업 모두 변조 가능한 로컬 사용자 방어는 아님. 실패 .partial/복원 DB·폴더는 남아 용량 관리 필요 |
+| 29 | 의존성 감사 게이트 범위 | high 이상·프로덕션 의존성만 차단. moderate/low·개발 전용은 통과. `pnpm audit` 는 npm 권고 서비스 가용성에 의존. 권고의 실제 악용 시험은 하지 않았다 |
+| 30 | **운영 이미지 빌드 불가(2026-09-12부터, 기존 결함)** | 루트 `package.json` 의 `engines.node >=22.0.0`(커밋 `45636ce`)과 `infra/Dockerfile` 의 `FROM node:20-slim` 이 충돌 — `.npmrc` 의 `engine-strict` 때문에 `pnpm install --frozen-lockfile` 이 `ERR_PNPM_UNSUPPORTED_ENGINE` 로 실패한다. CI 는 이미지를 빌드하지 않고 `phase8`(파괴적)은 돌리지 않아 발견되지 않았다. **결정 필요:** 베이스를 `node:22-slim` 으로 올릴지, engines 를 완화할지. 새 플러그인 5종은 Node 20·22 어느 쪽에서도 동작함을 확인했다. 부수 관찰: Dockerfile 은 `corepack prepare pnpm@9.15.9`, `packageManager` 는 `pnpm@9.12.0` — 어긋나 있다 |
+| 31 | 검증 하네스 ↔ 도구 jail 충돌(macOS) | `packages/tools/src/builtin/fs.ts:48` 은 `realpath(root) !== root` 이면 "workspace root must not contain symbolic links" 로 거부한다. macOS `tmpdir()` 는 항상 `/var/…`(→`/private/var`) 심볼릭 경로라 `mkdtemp(tmpdir())` 로 루트를 만드는 하네스가 걸린다. **phase7 이 `TMPDIR` 미정규화 시 34/35 로 실패**(주입 방어 시험이 도구 오류를 받고 답을 못 함). `TMPDIR=$(node -p 'require("fs").realpathSync(require("os").tmpdir())')` 로 정규화하면 PASS. 다른 하네스(phase4·5·6, s2-scenario)도 같은 패턴이 있을 수 있다 — 미점검 |
+| 32 | API 오류 분류 잡음 | (a) 클라이언트가 응답 전에 연결을 끊으면(화면 전환) 서버가 `unhandled error`(level 50)를 남긴다 — bigdata 조회에서 재현·통제군 확인. (b) 형식이 잘못된 UUID 경로(`/v1/sessions/undefined/messages`)가 400/404 가 아니라 **500 `internal`** 이다. 둘 다 `server.ts` 의 `setErrorHandler` 가 `AiosError`/`ZodError` 만 분류하기 때문 — 진짜 장애와 구분되지 않는다. 사용자 영향은 확인하지 못했고 Fastify 버전과 무관한 앱 로직으로 판단하지만, 4.x 에서의 재현은 하지 않았다 |
 
 ---
 
@@ -295,6 +302,11 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 채점기가 정답을 오답 처리 | 정규식으로 TS 타입을 지우다 삼항 `: x` 를 먹음 | esbuild 트랜스파일 사용 |
 | 뚜껑 닫으면 작업 중단 | 잠자기(현재 잠자기 방지는 유휴만) | 오래 걸리는 작업 전 전원·`caffeinate -dimsu` 확인 |
 | 기기가 이유 없이 느리고 부하 평균 10~19 | **tsx 가 띄운 esbuild 서비스(`--service=0.28.1 --ping`)가 부모 node 가 죽은 뒤 고아로 남아 헛돈다.** 2026-09-07 에 SIGBUS·`kill -9` 로 서버를 정리하면서 2개가 생겨 **4일 반 동안 각 CPU 340%**(코어 약 7개)를 먹었다. SIGTERM 도 무시한다 | 아래 §11 의 점검 명령. 부모가 launchd(PPID 1)인 esbuild 는 전부 고아다 |
+| e2e 가 `session.id` 가 `undefined` 라며 7건 실패, 서버 로그에 `/v1/sessions/undefined/messages` | e2e 스펙은 `request.post("/v1/sessions")` 를 **인증 헤더 없이** 부른다 — **키 없는 서버(`LOCAL_NO_AUTH=1`)를 전제**한다. `dev-up.sh` 서버는 키 인증이라 401 | 키 없는 서버에 붙인다: `LOCAL_NO_AUTH=1 PORT=8792 pnpm --filter @aios/api dev` 후 `AIOS_BASE_URL=http://127.0.0.1:8792`. 그러면 123 PASS/3 skip |
+| `AIOS 시작.command` 가 "시작기 작업 폴더를 확인할 수 없습니다" | 시작기가 자기 프로세스의 cwd 를 `lsof` 류로 확인해 저장소 루트와 비교한다(`scripts/local-lifecycle.mjs:228`). 에이전트 하네스 하위 프로세스에서는 통과하지 못했다 | 사용자의 Finder 더블클릭/일반 터미널에서 실행. 에이전트는 위 키 없는 서버를 직접 띄운다 |
+| `dev-up.sh` 가 "API 서버가 뜨지 않았다", 로그에 `nohup: pnpm: No such file or directory` | 셸의 PATH 에 corepack 셔임이 없다(에이전트 셸은 사용자 프로필을 다 읽지 않을 수 있다) | `AGENTS.md` 의 `export PATH="…:/usr/local/lib/node_modules/corepack/shims:$PATH"` 를 먼저 실행한다. 확인: `command -v pnpm` → `/usr/local/lib/node_modules/corepack/shims/pnpm`. |
+| 서버를 종료했는데 `pnpm … dev` / `tsx` 프로세스가 남아 있음(ppid=1) | 리스너 PID 만 종료하면 부모 래퍼와 tsx 자식이 고아가 된다 | 리스너가 아니라 **`--filter @aios/api dev` 래퍼 PID** 를 SIGTERM. 이후 §11 점검(`ps` 로 `esbuild` ppid=1 확인) |
+| `git` 이 "You have not agreed to the Xcode license" 만 출력 | `/usr/bin/git` 셔임이 Xcode 라이선스 동의(sudo)를 요구 | `/Library/Developer/CommandLineTools/usr/bin/git` 를 직접 호출. GitHub 쪽은 `gh` |
 
 ---
 
@@ -329,6 +341,7 @@ docs/               설계·검증 문서 — 01~09 설계, 10·final 검증 보
 - 원본 데이터 폴더 `00_인덱스/` 에 공공데이터 API 키 평문 파일 4개(`_KOSIS_/_KMA_/_NAVER_/_SEOUL_APIKEY.txt`)가 있다.
   저장소·문서·로그로 옮기지 말 것.
 - 비밀은 `.env`·`.env.local`(gitignore)과 `/Volumes/T7/bigdata/secrets/` 에만 둔다.
+- 의존성 취약점: `pnpm run audit:prod`(high 이상·프로덕션). 결과가 나오면 `docs/08-security.md` §15.5 의 방식으로 조치한다 — 메이저 업그레이드는 타입 검사가 못 잡는 동작 변경이 있으므로 프리플라이트·정적 서빙처럼 **브라우저 경계**를 직접 시험한다.
 
 ---
 

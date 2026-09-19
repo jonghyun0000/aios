@@ -12,7 +12,7 @@ function fixture() {
   const ctx = { pool: { query } } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId: "org", role: "owner", via: "local", scopes: ["*"] }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 400).send({ error: err.message }));
+  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 400).send({ error: (err as Error).message }));
   registerWorkspaceRoutes(app, ctx);
   return { app, ctx, query };
 }
