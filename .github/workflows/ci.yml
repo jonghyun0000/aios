@@ -57,6 +57,10 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+      - name: Container Node and pnpm contract (no deployment)
+        run: |
+          node scripts/check-container-contract.mjs
+          node --test scripts/check-container-contract.test.mjs
       - name: Typecheck
         run: pnpm typecheck
       - name: Lint

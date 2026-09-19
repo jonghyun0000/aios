@@ -1,8 +1,9 @@
 # Multi-stage: 하나의 이미지 정의에서 api / worker 두 타깃을 뽑는다.
 # 이유: 두 프로세스는 같은 코드베이스의 다른 엔트리포인트일 뿐이므로 빌드 캐시를 공유하는 편이
 # 이미지 드리프트(api와 worker가 서로 다른 코드로 배포되는 사고)를 막는다.
-FROM node:20-slim AS base
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# 호스트·CI와 같은 지원 major/패키지 매니저를 사용한다. 정적 CI 계약 검사로 드리프트를 막는다.
+FROM node:22-slim AS base
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
 # --- deps: 매니페스트만 먼저 복사해 레이어 캐시를 살린다 ---

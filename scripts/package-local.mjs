@@ -20,8 +20,8 @@ const APPS = ["api", "web", "cli", "verify", "demo"];
 const PACKAGES = ["ai", "collab", "indexer", "memory", "plugin-host", "sdk", "shared", "tools"];
 const TOP = new Set([
   "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json", "tsconfig.json", "turbo.json",
-  "vitest.shared.ts", "eslint.config.js", "docker-compose.yml", ".env.example", ".npmrc", ".gitignore", ".gitattributes",
-  "AGENTS.md", "CLAUDE.md", "HANDOFF.md", "README.md", "CONTRIBUTING.md", "SECURITY.md", "처음 사용하기.md", "aios-chat.html", "vercel.json", ".vercelignore",
+  "vitest.shared.ts", "eslint.config.js", "docker-compose.yml", ".dockerignore", ".env.example", ".npmrc", ".gitignore", ".gitattributes",
+  "AGENTS.md", "CLAUDE.md", "HANDOFF.md", "NEXT_STEPS.md", "CHANGELOG.md", "README.md", "CONTRIBUTING.md", "SECURITY.md", "처음 사용하기.md", "aios-chat.html", "vercel.json", ".vercelignore",
   "AIOS 시작.command", "AIOS 종료.command", "AIOS 상태 확인.command", "AIOS 백업.command",
   "AIOS 복원 검사.command", "AIOS 사용 패키지 만들기.command",
 ]);

@@ -31,6 +31,7 @@ async function fixture(t) {
 }
 
 test("명시 allowlist는 제품 소스·설정·마이그레이션·한글 launcher만 포함한다", () => {
+  for (const path of [".dockerignore", "NEXT_STEPS.md", "CHANGELOG.md"]) assert.equal(allowedFile(path), true, path);
   for (const path of ["vercel.json", ".vercelignore", "apps/demo/package.json", "apps/demo/src/App.tsx", "apps/demo/public/favicon.svg", "scripts/doctor.mjs", "apps/web/a11y.config.ts"]) assert.equal(allowedFile(path), true, path);
   for (const path of [".vercel/project.json", ".vercel/.env.production.local", "apps/demo/dist/assets/private.js", "apps/demo/.env.local"]) assert.equal(allowedFile(path), false, path);
   for (const path of [".env.example", ".npmrc", ".gitattributes", "apps/web/src/pages/Chat.tsx", "packages/tools/src/builtin/fs.ts", "packages/tools/scripts/mcp-smoke.ts", "infra/migrations/0003_api_key_role.sql", "AIOS 사용 패키지 만들기.command", "docs/20-stage4.md", ".github/workflows/ci.yml"]) assert.equal(allowedFile(path), true, path);
@@ -40,6 +41,7 @@ test("명시 allowlist는 제품 소스·설정·마이그레이션·한글 laun
 
 test("실제 tar 패키지와 SHA256를 검증하고 비밀·출력은 archive에서 제외한다", async t => {
   const f = await fixture(t);
+  for (const path of [".dockerignore", "NEXT_STEPS.md", "CHANGELOG.md"]) await f.put(path);
   for (const path of [".env.local", ".env", "apps/api/src/secrets/token.json", "node_modules/tool/index.js", "apps/web/dist/bundle.js", "apps/verify/logs/private.jsonl", "docs/._private.md"]) await f.put(path, "DO-NOT-PACK-secret-fixture");
   const result = await createPackage(f);
   assert.equal(result.status, "passed");
@@ -49,6 +51,7 @@ test("실제 tar 패키지와 SHA256를 검증하고 비밀·출력은 archive�
   assert.ok(checksum.startsWith(result.sha256 + "  "));
   const listed = (await exec("tar", ["-tzf", result.archive])).stdout.split("\n");
   assert.ok(listed.includes("./.env.example"));
+  for (const path of [".dockerignore", "NEXT_STEPS.md", "CHANGELOG.md"]) assert.ok(listed.includes(`./${path}`), path);
   assert.ok(listed.includes("./infra/migrations/0003_api_key_role.sql"));
   assert.ok(!listed.some(path => /node_modules|dist\/|secrets\/|\.env\.local|private\.jsonl|\/\._/.test(path)));
   const manifest = JSON.parse(await readFile(join(result.directory, "manifest.json"), "utf8"));
