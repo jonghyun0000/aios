@@ -14,7 +14,7 @@
 - **남은 P0:** tmpdir 실경로 하네스, 잘못된 UUID/연결 종료 오류 분류, e2e 서버 전제, pnpm 없는 시작기 안내(NEXT_STEPS 1-2~1-5).
 - **공개 상태:** GitHub `jonghyun0000/aios`; 체험판 `https://aios-demo-mu.vercel.app`은 가상 응답/파일만 쓰는 별도 정적 앱이다. push가 체험판을 재배포하지 않는다.
 - **공개 반영(2026-09-20):** 사용자 승인으로 `15218c0`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35476338497)가 성공했다. Vercel 재배포는 미실행이다.
-- **현재 기동 차단:** Colima의 T7 공유가 `bad file descriptor`로 실패한다. 재시작은 DB/Redis 중단이 있어 승인 대기. 기존 통계 DB 범위와 새 자료 활용 준비는 [docs/31](docs/31-bigdata-connection.md)에 기록했다.
+- **현재 기동 정상(2026-09-20):** 사용자 승인 후 Colima 정상 재시작으로 T7 공유 오류 복구. 사용자 시작기로 API·워커 ready, 통계 화면4검사·채팅 응답/저장3회 확인. 신규 자료 적재는 별도이며 [docs/31](docs/31-bigdata-connection.md)에 기록했다.
 - **점수:** 기존 90/100은 당시 AI 자체 평가(`docs/22`). 별도 약70±6 의견과 근거 한계는 NEXT_STEPS §1에 있다. 이번 작업으로 점수를 올리지 않는다.
 - **전제 변경:** M1 Air 판매로 두 번째 Mac이 없다. 다른 Mac 설치 근거는 미충족으로 두고 같은 Mac/CI 결과로 대체 가산하지 않는다.
 - **안전 경계:** 사용자 DB·작업 파일·설정 보존. phase8/legacy-full/운영 복원·과거 볼륨 삭제 금지. 새 시험 자원만 정확한 ID로 정리한다.
@@ -193,7 +193,7 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 30 | **운영 이미지 빌드 불가 — 수정·격리 기동 검증 완료(2026-09-19)** | 기존 Node20/engines22 충돌을 clean HEAD에서 재현한 뒤 Node22·pnpm9.12.0으로 정렬했다. 실제 api 이미지 빌드·격리 `/healthz`/`readyz` 200·인증 401·일반 사용자 실행·종료0, 버전 계약 결함 주입과 Docker 컨텍스트 제외 시험 확인. CI에는 정적 버전 계약만 추가했으며 2026-09-20 `15218c0` 원격 CI audit·verify 성공. msgpackr 선택 네이티브 경고/가속 미사용은 남고 worker·migrate·amd64·실제 모델은 이번 범위 밖이다. 원인/실패/근거: `docs/30-container-build.md` |
 | 31 | 검증 하네스 ↔ 도구 jail 충돌(macOS) | `packages/tools/src/builtin/fs.ts:48` 은 `realpath(root) !== root` 이면 "workspace root must not contain symbolic links" 로 거부한다. macOS `tmpdir()` 는 항상 `/var/…`(→`/private/var`) 심볼릭 경로라 `mkdtemp(tmpdir())` 로 루트를 만드는 하네스가 걸린다. **phase7 이 `TMPDIR` 미정규화 시 34/35 로 실패**(주입 방어 시험이 도구 오류를 받고 답을 못 함). `TMPDIR=$(node -p 'require("fs").realpathSync(require("os").tmpdir())')` 로 정규화하면 PASS. 다른 하네스(phase4·5·6, s2-scenario)도 같은 패턴이 있을 수 있다 — 미점검 |
 | 32 | API 오류 분류 잡음 | (a) 클라이언트가 응답 전에 연결을 끊으면(화면 전환) 서버가 `unhandled error`(level 50)를 남긴다 — bigdata 조회에서 재현·통제군 확인. (b) 형식이 잘못된 UUID 경로(`/v1/sessions/undefined/messages`)가 400/404 가 아니라 **500 `internal`** 이다. 둘 다 `server.ts` 의 `setErrorHandler` 가 `AiosError`/`ZodError` 만 분류하기 때문 — 진짜 장애와 구분되지 않는다. 사용자 영향은 확인하지 못했고 Fastify 버전과 무관한 앱 로직으로 판단하지만, 4.x 에서의 재현은 하지 않았다 |
-| 33 | Colima T7 공유 연결 실패(2026-09-20) | 호스트 폴더·공유 설정은 존재하지만 VM의 stat과 시작기의 bind probe가 `bad file descriptor`로 실패한다. API는 시작되지 않았고 DB/Redis/Ollama만 정상. 공유 서비스 중단을 수반하는 Colima 재시작은 사용자 승인 대기. 통계 자료 원본 손상으로 단정하지 않는다. 근거와 데이터 적용 범위는 `docs/31-bigdata-connection.md` |
+| 33 | Colima T7 공유 연결 실패 — 현재 복구(2026-09-20) | 사용자 승인 후 `colima stop` → `colima start`로 VM에서 T7 경로 stat 정상, 시작기 bind probe 통과. 같은 기존 DB/Redis 컨테이너가 healthy, API·워커 ready, 통계 브라우저4/4·채팅 응답/저장3/3. 삭제·초기화·공유 설정 변경 없음. 재연결 후 재발 가능성과 원인 자체는 미해결이며 신규 자료 적재와는 구분한다. 상세 `docs/31-bigdata-connection.md` |
 
 ---
 

@@ -27,7 +27,7 @@ invalid mount config for type "bind": stat /Volumes/T7/bigdata/workspaces/my-fir
 
 호스트에는 폴더가 있고 Colima 설정에도 해당 공유가 이미 존재한다. `colima ssh -- stat /Volumes/T7/bigdata/workspaces` 역시 `Bad file descriptor`를 반환했다. 단순 설정 누락 안내와 달리 실제 문제는 실행 중 VM의 공유 경로 접근 실패다. 데이터 손상 여부를 이 오류만으로 판정하지 않는다.
 
-**Colima 재시작은 기존 Postgres/Redis를 잠시 중단하므로 사용자 승인 요청 후 대기한다.** mount 검사를 끄거나 파일 jail을 완화하지 않는다. 정상 시작기를 우회해 기능 일부가 실패할 서버를 대신 띄우지도 않는다. 새 API/워커는 시작되지 않았으며 실패한 시작기는 종료됐다.
+**최초 점검 당시에는 Colima 재시작 승인을 기다렸다. 아래 복구 기록에서 승인 후 해결을 확인했다.** mount 검사를 끄거나 파일 jail을 완화하지 않았다. 최초 실패에서는 API/워커가 시작되지 않았고 시작기는 종료됐다.
 
 ## 재개 시 완료 기준 (수정/적재 전에 등록)
 
@@ -36,3 +36,18 @@ invalid mount config for type "bind": stat /Volumes/T7/bigdata/workspaces/my-fir
 3. 기존 정제본의 단위 혼합·분기·분류축 경고를 구분한다. 통계 수치 정확성이나 최신성을 임의로 보증하지 않는다.
 4. 사용자 우선 분야에 맞춰 연구 보완본 또는 경진대회 자료를 별도 버전으로 준비한다. 기존 DB를 즉시 덮어쓰지 않고, 입력 해시·스키마·행 수·변환 손실·출처를 기록한 뒤 활성화한다.
 5. 모델 품질을 주장하려면 기존 튜닝 과제가 아닌 사전 등록 과제를 최소3회 실행한다. 아직 모델 질의·신규 데이터 적재·화면 확인은 수행하지 않았다. 점수 변경 없음.
+
+## 승인 후 복구 — 2026-09-20 16:34 KST 이후
+
+사용자가 명시적으로 Colima 재시작과 AIOS 복구를 요청했다. 위 기준1·2의 환경 복구/기존 데이터 연결 확인을 수행했다. 기준4의 신규 자료 적재는 이번 요청에 추가하지 않았다.
+
+- 재시작 직전 VM stat의 `Bad file descriptor`를 다시 확인했다. `colima stop && colima start`가 종료0으로 완료됐고 기존 VM을 재사용했다. 공유 설정·데이터·볼륨 삭제/초기화 없이 VM의 T7 작업 폴더 stat이 정상으로 바뀌었다.
+- 백그라운드 shell 시작 시도는 프로세스가 유지되지 않아 정상 PTY에서 `AIOS_NO_OPEN=1 bash scripts/start-local.sh`로 기동했다. 시작기의 bind 표식 검사와 변경 소스 재빌드를 통과했다. API·worker·DB·Redis ready, 유지보수 잠금 없음. 사용자가 바로 사용할 수 있도록 감독 프로세스와 앱을 실행 상태로 남겼다.
+- 기존 컨테이너 ID Postgres `e6dd1934c2b5`, Redis `851d20e1cd45`가 그대로 healthy 상태다. Ollama 응답 정상. `/healthz`와 `/readyz` 모두 HTTP200, postgres/redis 검사 ok.
+- agent-browser CLI가 없고 앱 브라우저 도구도 kernel assets 오류로 연결되지 않아 설치된 Playwright Chromium을 대체 사용했다. 실제 `/#/data` 화면 30개 행·오류 오버레이0·pageerror0을 확인하고 스크린샷을 시각 점검했다. 기존 `e2e/data.spec.ts` desktop **4/4 PASS**: 검색, 페이지네이션, 상세 차트/메타데이터, 지역 필터로 차트 변경. 모의 API가 아닌 8791 실서버다.
+- 도구·RAG·장기기억을 끈 별도 합성 대화에서 짧은 인사 요청 **3/3**에 비어 있지 않은 SSE 응답·정상 done·assistant 메시지 저장을 확인했다. 새로 만든 세션3개만 정확한 ID로 휴지통에 옮겼다(원본 대화는 변경하지 않음). 이는 연결/저장 스모크 검사이며 데이터 분석 정확성·모델 품질 개선 평가가 아니다.
+- 타입·린트·이식 가능 단위·빌드 **4단계 PASS**, 단위 **464/464**. 제외5파일·시험 없는5패키지는 별도이며 PASS에 포함하지 않는다. 고아 esbuild0. 제품 코드/새 영구 시험 추가가 없어 결함 주입 새 항목은 없다. 정상 복구를 위해 기존 장애를 다시 주입하지 않았다.
+
+산출물은 `/Volumes/T7/bigdata/verification-reports/`에 있다: `recovery-20260920-data.png`, `recovery-20260920-browser.log`, `recovery-20260920-chat.log`, `recovery-20260920-static.log`, `verify-1789889827539-aef6a32b-2c93-44fe-b9a7-81e7c8496e3c.json`. Playwright 임시 결과는 기존 설정의 macOS 임시 폴더 예외를 따랐다.
+
+T7 공유가 왜 stale 상태가 됐는지는 확정하지 않았다. T7 재연결 후의 무재발, 전체 데이터 무결성, 신규 보완본·경진대회 적재, 승인/복구 전체 회귀를 이번 결과로 보증하지 않는다. 점수 변경·GitHub push·Vercel 재배포 없음.
