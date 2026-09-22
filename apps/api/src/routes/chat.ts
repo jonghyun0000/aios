@@ -32,6 +32,10 @@ const BodySchema = z.object({
     .default({ useRag: true, useMemory: true, useLongTermMemory: true }),
 });
 
+// PostgreSQL UUID 컬럼에 원문을 넘기면 잘못된 값이 22P02/500이 된다. DB 경계보다
+// 먼저 같은 스키마로 읽기·쓰기 경로를 모두 막아 클라이언트 오류를 400으로 분류한다.
+const SessionParamsSchema = z.object({ id: z.string().uuid() });
+
 export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void {
   registerExecutionRoutes(app, ctx);
   const orchestrator = new AgentOrchestrator(ctx);
@@ -40,7 +44,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.post("/v1/sessions/:id/messages", async (req, reply) => {
     // 도구를 끈 대화도 메시지를 저장하고 모델 비용을 발생시킨다. viewer는 읽기만 허용한다.
     requireRole(req.auth, "member");
-    const { id: sessionId } = req.params as { id: string };
+    const { id: sessionId } = SessionParamsSchema.parse(req.params);
     const parsed = BodySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("invalid body", parsed.error.issues);
     const body = parsed.data;
@@ -139,7 +143,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
   });
 
   app.get("/v1/sessions/:id/messages", async (req) => {
-    const { id } = req.params as { id: string };
+    const { id } = SessionParamsSchema.parse(req.params);
     const { rows } = await ctx.pool.query(
       `select m.id, m.role, m.content, m.created_at
          from messages m join sessions s on s.id = m.session_id

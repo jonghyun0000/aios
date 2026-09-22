@@ -141,7 +141,7 @@
 |---|---|---|---|---|
 | 1-1 | 운영 이미지 빌드 불가 (위험 30) | `docker build -f infra/Dockerfile --target api` 가 성공하고, 컨테이너를 띄운 뒤 `/healthz` 가 200 을 돌려준다. phase8 이 아닌 비파괴 방식으로 확인한다. engines 와 Dockerfile 베이스의 불일치를 잡는 CI 검사를 추가하고 결함 주입으로 확인한다 | — | 완료 (`25557a6`, 실행 근거 `docs/30-container-build.md`) |
 | 1-2 | 검증 하네스 tmpdir (위험 31) | `TMPDIR` 를 우회하지 않고도 phase7 이 PASS 한다. 같은 패턴을 쓰는 다른 하네스는 실행 결과로 영향 여부를 가린다. 세부 완료 기준과 최초 재현은 `docs/32-tmpdir-harness.md`에 사전 등록했다 | — | 완료 (`ab31904`, 실행 근거 `docs/32-tmpdir-harness.md`) |
-| 1-3 | API 오류 분류 (위험 32) | 클라이언트가 연결을 끊어도 error 레벨 로그가 0건이다. 잘못된 UUID 경로는 400 을 돌려준다. 둘 다 결함 주입으로 확인한다 | — | 대기 |
+| 1-3 | API 오류 분류 (위험 32) | 클라이언트가 연결을 끊어도 error 레벨 로그가 0건이다. 잘못된 UUID 경로는 400 을 돌려준다. 둘 다 결함 주입으로 확인한다. 세부 완료 기준과 최초 재현은 `docs/33-api-error-classification.md`에 사전 등록했다 | — | 진행 |
 | 1-4 | e2e 의 서버 전제 | `verify-all e2e` 가 키 인증 서버를 가리키면 실행 전에 BLOCKED 와 이유를 출력한다. 지금은 7건 실패로 나타나서 회귀처럼 보인다 | — | 대기 |
 | 1-5 | `dev-up.sh` 의 조용한 실패 | `pnpm` 이 PATH 에 없으면 서버를 띄우기 전에 원인과 해결 방법(AGENTS.md 의 PATH)을 출력하고 실패한다. 지금은 "API 서버가 뜨지 않았다"만 나오고, 원인은 `/tmp/aios-api.log` 안에 묻힌다 | — | 대기 |
 

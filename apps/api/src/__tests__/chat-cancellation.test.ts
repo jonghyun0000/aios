@@ -4,6 +4,8 @@ import { AgentOrchestrator } from "../agent/orchestrator.js";
 import { registerChatRoutes } from "../routes/chat.js";
 import type { AppContext } from "../context.js";
 
+const sessionId = "10000000-0000-4000-8000-000000000001";
+
 describe("채팅 중단과 대화 잠금", () => {
   it("중복 요청을 거부하고 연결을 끊으면 작업을 취소한 뒤 잠금을 푼다", async () => {
     const signals: AbortSignal[] = [];
@@ -24,17 +26,17 @@ describe("채팅 중단과 대화 잠금", () => {
     const second = new AbortController();
     const options = { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ content: "test", tools: { enabled: false } }) };
     try {
-      const response = await fetch(`${url}/v1/sessions/one/messages`, { ...options, signal: ac.signal });
+      const response = await fetch(`${url}/v1/sessions/${sessionId}/messages`, { ...options, signal: ac.signal });
       const reader = response.body!.getReader();
       await reader.read();
       expect(signals).toHaveLength(1);
-      const conflict = await fetch(`${url}/v1/sessions/one/messages`, options);
+      const conflict = await fetch(`${url}/v1/sessions/${sessionId}/messages`, options);
       expect(conflict.status).toBe(409);
       ac.abort();
       await vi.waitFor(() => expect(signals[0]!.aborted).toBe(true));
       let resumed: Response | undefined;
       await vi.waitFor(async () => {
-        resumed = await fetch(`${url}/v1/sessions/one/messages`, { ...options, signal: second.signal });
+        resumed = await fetch(`${url}/v1/sessions/${sessionId}/messages`, { ...options, signal: second.signal });
         expect(resumed.status).toBe(200);
       });
       second.abort();

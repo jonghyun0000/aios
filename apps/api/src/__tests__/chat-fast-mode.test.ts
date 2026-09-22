@@ -5,6 +5,8 @@ import { registerChatRoutes } from "../routes/chat.js";
 import type { AppContext } from "../context.js";
 import type { CompletionRequest } from "@aios/shared";
 
+const sessionUrl = "/v1/sessions/10000000-0000-4000-8000-000000000001/messages";
+
 afterEach(() => vi.restoreAllMocks());
 describe("채팅 모드 전달", () => {
   it("빠른 모드는 기록을 유지하고 추론/장기기억만 끈다", async () => {
@@ -15,16 +17,16 @@ describe("채팅 모드 전달", () => {
       env: {}, pool: { query: async (sql: string) => ({ rows: sql.includes("select p.id as project_id") ? [{ project_id: null, name: null }] : [] }) }, usage: { bind: () => {} },
     } as unknown as AppContext);
     try {
-      const response = await app.inject({ method: "POST", url: "/v1/sessions/test/messages", payload: {
+      const response = await app.inject({ method: "POST", url: sessionUrl, payload: {
         content: "안녕", tools: { enabled: false }, routing: { reasoning: "off", taskClass: "chat" }, context: { useLongTermMemory: false },
       } });
       expect(response.statusCode).toBe(200);
       expect(run).toHaveBeenCalledWith(expect.objectContaining({ reasoning: "off", useMemory: true, useLongTermMemory: false, toolsEnabled: false, taskClass: "chat" }));
-      await app.inject({ method: "POST", url: "/v1/sessions/test/messages", payload: { content: "기존 호출", tools: { enabled: false } } });
+      await app.inject({ method: "POST", url: sessionUrl, payload: { content: "기존 호출", tools: { enabled: false } } });
       expect(run).toHaveBeenLastCalledWith(expect.objectContaining({ useLongTermMemory: true, useMemory: true, reasoning: undefined }));
-      await app.inject({ method: "POST", url: "/v1/sessions/test/messages", payload: { content: "17*23+41", mode: "auto", tools: { enabled: false } } });
+      await app.inject({ method: "POST", url: sessionUrl, payload: { content: "17*23+41", mode: "auto", tools: { enabled: false } } });
       expect(run).toHaveBeenLastCalledWith(expect.objectContaining({ mode: "auto", toolsEnabled: false }));
-      const invalid = await app.inject({ method: "POST", url: "/v1/sessions/test/messages", payload: { content: "안녕", mode: "typo" } });
+      const invalid = await app.inject({ method: "POST", url: sessionUrl, payload: { content: "안녕", mode: "typo" } });
       expect(invalid.statusCode).toBeGreaterThanOrEqual(400);
     } finally { await app.close(); }
   });

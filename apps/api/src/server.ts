@@ -2,8 +2,6 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import cookie from "@fastify/cookie";
-import { ZodError } from "zod";
-import { AiosError } from "@aios/shared";
 import type { AppContext } from "./context.js";
 import { authenticate } from "./auth.js";
 import { registerChatRoutes } from "./routes/chat.js";
@@ -19,6 +17,7 @@ import { registerWs } from "./ws.js";
 import { registerCollabWs } from "./collab-ws.js";
 import { safeLoggerOptions } from "./safe-logging.js";
 import { CORS_OPTIONS } from "./cors-options.js";
+import { installApiErrorHandler } from "./api-error-handler.js";
 
 export async function buildServer(ctx: AppContext) {
   const app = Fastify({
@@ -70,27 +69,8 @@ export async function buildServer(ctx: AppContext) {
     req.auth = await authenticate(ctx, req);
   });
 
-  // --- 에러 매핑: 도메인 에러는 구조화된 응답으로, 나머지는 500 + 로그 ---
-  app.setErrorHandler((err, req, reply) => {
-    if (err instanceof AiosError) {
-      return reply.status(err.status).send(err.toJSON());
-    }
-    // zod 검증 실패는 클라이언트 잘못이지 서버 장애가 아니다.
-    // 매핑하지 않으면 `?limit=99999` 같은 흔한 실수가 500으로 나가고,
-    // 모니터링에서 진짜 장애와 구분되지 않는다.
-    if (err instanceof ZodError) {
-      return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: "invalid request parameters",
-          retryable: false,
-          details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-        },
-      });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.status(500).send({ error: { code: "internal", message: "internal error", retryable: true } });
-  });
+  // --- 에러 매핑: 도메인/입력/연결 종료를 분리하고 나머지만 500 + error 로그 ---
+  installApiErrorHandler(app);
 
   registerHealthRoutes(app, ctx);
   registerLocalOperationsRoutes(app, ctx);

@@ -1,10 +1,10 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import { AiosError } from "@aios/shared";
 import type { AuthContext } from "@aios/shared";
 import type { AppContext } from "../context.js";
 import { registerChatRoutes } from "../routes/chat.js";
 import { sessionLocks } from "../workspace.js";
+import { installApiErrorHandler } from "../api-error-handler.js";
 
 const id = "10000000-0000-4000-8000-000000000001";
 const url = `/v1/sessions/${id}/messages`;
@@ -28,13 +28,26 @@ function fixture(role: AuthContext["role"], via: "api_key" | "session" = "sessio
   } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId, role, via, scopes: ["*"], ...(via === "session" ? { userId: "user" } : {}) }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
+  installApiErrorHandler(app);
   registerChatRoutes(app, ctx);
   return { app, ctx, query, stream, record, publish, checkQuota, bind };
 }
 const payload = { content: "합성 대화", tools: { enabled: false }, context: { useRag: false, useMemory: false, useLongTermMemory: false } };
 
 describe("채팅은 도구 여부와 관계없이 쓰기 — 실제 라우트/오케스트레이터, 인증·DB·모델 대역", () => {
+  it.each(["GET", "POST"] as const)("%s 메시지 경로는 잘못된 UUID를 DB 전에 400으로 거부한다", async (method) => {
+    const f = fixture("member");
+    try {
+      const response = await f.app.inject({
+        method,
+        url: "/v1/sessions/not-a-uuid/messages",
+        ...(method === "POST" ? { payload } : {}),
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "validation_error", retryable: false } });
+      expect(f.query).not.toHaveBeenCalled();
+    } finally { await f.app.close(); }
+  });
   it.each([
     { via: "api_key" as const, enabled: false }, { via: "session" as const, enabled: false },
     { via: "api_key" as const, enabled: true }, { via: "session" as const, enabled: true },

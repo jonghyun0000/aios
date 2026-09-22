@@ -7,12 +7,14 @@ import { referenceChunks, type ReferenceFile } from "../workspace.js";
 import { parsePreference, renderPreferences, resolvePreferences, type ConversationPreference } from "../agent/preferences.js";
 
 const filler: ChatMessage[] = Array.from({ length: 120 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `합성 점검 ${i}` }));
-function fixture(history: ChatMessage[], orgId = "org", sessionId = "session", files: ReferenceFile[] = [], contextWindow = 8192) {
+const sessionIdFixture = "10000000-0000-4000-8000-000000000001";
+const foreignSessionId = "10000000-0000-4000-8000-000000000002";
+function fixture(history: ChatMessage[], orgId = "org", sessionId = sessionIdFixture, files: ReferenceFile[] = [], contextWindow = 8192) {
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
-    if (sql.includes("select p.id as project_id")) return { rows: orgId === "org" && sessionId === "session" ? [{ project_id: null, name: null }] : [] };
+    if (sql.includes("select p.id as project_id")) return { rows: orgId === "org" && sessionId === sessionIdFixture ? [{ project_id: null, name: null }] : [] };
     if (sql.includes("from workspace_files")) return { rows: files };
     if (sql.includes("from messages m join sessions")) {
-      expect(params).toEqual(["session", "org"]);
+      expect(params).toEqual([sessionIdFixture, "org"]);
       expect(sql).toContain("s.org_id = $2"); expect(sql).toContain("s.deleted_at is null");
       const prefs = sql.includes("m.role = 'user'");
       if (prefs) { expect(sql).toContain("limit 500"); expect(sql).toContain("513"); }
@@ -77,7 +79,7 @@ describe("bounded session preferences through the real chat route", () => {
     finally { await f.app.close(); }
   });
   it("SSE source metadata includes only excerpts that survived the real model input budget", async () => {
-    const f = fixture([], "org", "session", [
+    const f = fixture([], "org", sessionIdFixture, [
       { id: "large", name: "large.txt", content: "release milestone " + "합".repeat(800) },
       { id: "small", name: "small.txt", content: "release = ORBIT-TEST" },
     ], 3300);
@@ -92,7 +94,7 @@ describe("bounded session preferences through the real chat route", () => {
       expect(events.some((e) => e.type === "context_trimmed")).toBe(true);
     } finally { await f.app.close(); }
   });
-  it.each([["foreign", "session"], ["org", "foreign"]])("does not load another org/session (%s/%s)", async (org, session) => {
+  it.each([["foreign", sessionIdFixture], ["org", foreignSessionId]])("does not load another org/session (%s/%s)", async (org, session) => {
     const f = fixture([{ role: "user", content: "이 대화에서는 답변을 한국어로 해줘." }], org, session);
     try { expect((await f.send()).statusCode).toBe(404); expect(f.stream).not.toHaveBeenCalled(); expect(f.query).toHaveBeenCalledOnce(); }
     finally { await f.app.close(); }
