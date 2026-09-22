@@ -28,6 +28,16 @@ START_SERVICES=1
 
 log() { [ "$EXPORT_ONLY" = "--export-only" ] || echo "$@" >&2; }
 
+# 백그라운드 subshell에서 명령 탐색이 실패하면 원인은 /tmp 로그에만 남고 부모는
+# 90초 뒤 서버 장애로 오진한다. 서비스나 키를 건드리기 전에 사용자가 바로 고칠 수 있게 막는다.
+if [ "$START_SERVICES" = 1 ] && ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm을 PATH에서 찾을 수 없다 — API 서버를 시작하지 않았다." >&2
+  echo "AGENTS.md의 PATH 설정을 먼저 적용하라:" >&2
+  echo '  export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/local/lib/node_modules/corepack/shims:$PATH"' >&2
+  echo "확인: command -v pnpm" >&2
+  exit 1
+fi
+
 [ -f "$ENV_FILE" ] || { echo "설정이 없다: $ENV_FILE (.env.example 참고)" >&2; exit 1; }
 set -a; . "$ENV_FILE"; set +a
 

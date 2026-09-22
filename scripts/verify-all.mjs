@@ -21,7 +21,7 @@ const STEPS = [
   { id: "typecheck", label: "Type check", cmd: "pnpm", args: ["-r", "--no-bail", "exec", "tsc", "--noEmit"] },
   { id: "lint", label: "Lint", cmd: "pnpm", args: ["exec", "eslint", ".", "--max-warnings=0"] },
   { id: "unit", label: "Portable unit tests (explicit local exclusions)", vitest: true },
-  { id: "local-ops", label: "Local operations fault injection", cmd: "node", args: ["--test", "scripts/local-backup.test.mjs", "scripts/local-lifecycle.test.mjs", "scripts/package-local.test.mjs", "scripts/local-api-backup.test.mjs", "scripts/doctor.test.mjs", "scripts/verification-policy.test.mjs", "scripts/verification-report.test.mjs", "scripts/verify-vitest.test.mjs", "scripts/verify-app-a11y.test.mjs", "scripts/public-demo-policy.test.mjs"] },
+  { id: "local-ops", label: "Local operations fault injection", cmd: "node", args: ["--test", "scripts/local-backup.test.mjs", "scripts/local-lifecycle.test.mjs", "scripts/package-local.test.mjs", "scripts/local-api-backup.test.mjs", "scripts/dev-up.test.mjs", "scripts/doctor.test.mjs", "scripts/verification-policy.test.mjs", "scripts/verification-report.test.mjs", "scripts/verify-vitest.test.mjs", "scripts/verify-app-a11y.test.mjs", "scripts/public-demo-policy.test.mjs"] },
   { id: "durability-local", label: "Isolated DB execution durability", vitest: true, needsDurability: true },
   { id: "index-local", label: "Actual T7 index boundary fixture", vitest: true, needsIndex: true },
   { id: "context-live", label: "Actual API DB and model context", cmd: "pnpm", args: ["--filter", "@aios/verify", "exec", "tsx", "src/eval/context-persistence.ts"], needsContext: true },
