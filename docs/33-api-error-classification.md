@@ -1,6 +1,6 @@
 # API 오류 분류
 
-> NEXT_STEPS 1-3의 완료 기준 사전 등록. 2026-09-22, 수정 전 작성. 구현·검증 커밋 `3a02beb`.
+> NEXT_STEPS 1-3의 완료 기준 사전 등록. 2026-09-22, 수정 전 작성. 구현·검증 커밋 `3a02beb`, 전체 UUID 경로 감사 확장 `6107a70`.
 
 ## 1. 범위와 최초 재현
 
@@ -90,3 +90,9 @@
 - Fastify 4에서 재현하지 않았고, 다른 OS·원격 프록시의 소켓 종료 형상은 미검증이다.
 - 외부 AI API 키·모델 품질·공개 체험판·원격 CI는 사용하거나 확인하지 않았다.
 - 감사한 현재 HTTP path-param 중 execution·workspace UUID 경로는 기존 Zod 검증을 사용했고, bigdata는 정수, OAuth provider와 marketplace slug/version은 텍스트 키라 제외했다. 새 라우트가 추가될 때 자동으로 UUID 검증을 강제하는 스키마 생성 체계까지 만든 것은 아니다.
+
+## 9. 정리
+
+- 이 작업이 만든 HEAD 사본 `aios-head-1-3-1cdb8dd`, 두 결함 주입 기준 사본 `aios-1-3-mutation-fixed-1cdb8dd`·`aios-1-3-core-mutation-3a02beb`만 정확한 경로로 제거했다.
+- 임의 포트 Fastify 서버와 실제 PostgreSQL 연결은 각 실행의 `finally`에서 닫았다. 사용자용 8791 서버와 사용자 데이터는 건드리지 않았다.
+- 정리 뒤 고아 esbuild와 이 작업이 남긴 Node/tsx 리스너는 0개였다. T7 검증 로그는 실패 이력과 실행 근거이므로 의도적으로 보존했다.
