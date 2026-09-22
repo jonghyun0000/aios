@@ -10,8 +10,7 @@
  */
 import { execFile } from "node:child_process";
 import { randomUUID, createHash } from "node:crypto";
-import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -24,6 +23,7 @@ import type { ToolAuditRecord, ToolDefinition } from "@aios/tools";
 import type { ChatMessage, ToolCall } from "@aios/shared";
 import { Report } from "./report.js";
 import { createHarness } from "./harness.js";
+import { TempWorkspaceRegistry } from "./temp-workspaces.js";
 
 const exec = promisify(execFile);
 const r = new Report("SPRINT 2 · STEP 6 — Full product scenario");
@@ -35,7 +35,8 @@ registry.register(readFileTool);
 registry.register(writeFileTool);
 registry.register(listDirTool);
 
-const workdir = await mkdtemp(join(tmpdir(), "aios-s2-"));
+const tempWorkspaces = new TempWorkspaceRegistry();
+const workdir = await tempWorkspaces.create("aios-s2-");
 
 /**
  * 프로젝트 테스트 러너를 도구로 노출한다.
@@ -461,7 +462,11 @@ await rpc("tools.register", { name: "count_exports", description: "count exporte
 } catch (err) {
   await r.guard("s2-scenario.uncaught", () => Promise.reject(err instanceof Error ? err : new Error(String(err))));
 } finally {
-  await h.close();
+  try {
+    await h.close();
+  } finally {
+    await tempWorkspaces.cleanup();
+  }
 }
 
 r.finish();

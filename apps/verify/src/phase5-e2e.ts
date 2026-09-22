@@ -9,8 +9,7 @@
  */
 import { execFile } from "node:child_process";
 import { randomUUID, createHash } from "node:crypto";
-import { mkdtemp, rm, readFile, writeFile, mkdir, readdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { assemblePrompt, renderTemplate, SYSTEM_CORE_TEMPLATE } from "@aios/ai";
@@ -23,6 +22,7 @@ import type { ToolAuditRecord } from "@aios/tools";
 import type { ChatMessage, ToolCall } from "@aios/shared";
 import { Report } from "./report.js";
 import { createHarness, hashEmbedder } from "./harness.js";
+import { TempWorkspaceRegistry } from "./temp-workspaces.js";
 
 const exec = promisify(execFile);
 const r = new Report("PHASE 5 — End-to-end scenario");
@@ -43,14 +43,12 @@ const executor = new ToolExecutor(registry, DEFAULT_POLICY, async (rec) => { aud
  * 사용자의 제약이 "산출물은 T7 에만, 맥에는 두지 않는다" 이고 tmpdir 은 맥 APFS 다.
  * 검증이 자기 흔적을 남기지 않는 것이 기본이다.
  */
-const TEMP_DIRS: string[] = [];
+const tempWorkspaces = new TempWorkspaceRegistry();
 async function tempDir(prefix: string): Promise<string> {
-  const d = await mkdtemp(join(tmpdir(), prefix));
-  TEMP_DIRS.push(d);
-  return d;
+  return tempWorkspaces.create(prefix);
 }
 async function cleanupTempDirs(): Promise<void> {
-  for (const d of TEMP_DIRS) await rm(d, { recursive: true, force: true }).catch(() => {});
+  await tempWorkspaces.cleanup();
 }
 
 try {

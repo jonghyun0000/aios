@@ -11,8 +11,7 @@
  */
 import { cpuUsage, memoryUsage } from "node:process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { assemblePrompt } from "@aios/ai";
 import type { ChatMessage } from "@aios/shared";
@@ -20,6 +19,7 @@ import { CodeRetriever, Indexer } from "@aios/indexer";
 import { DEFAULT_POLICY, ToolExecutor, ToolRegistry, readFileTool, writeFileTool } from "@aios/tools";
 import { Report } from "./report.js";
 import { createHarness, hashEmbedder } from "./harness.js";
+import { TempWorkspaceRegistry } from "./temp-workspaces.js";
 
 const r = new Report("PHASE 6 — Performance & load");
 const h = await createHarness();
@@ -106,14 +106,12 @@ const baselineCpu = cpuUsage();
  * 사용자의 제약이 "산출물은 T7 에만, 맥에는 두지 않는다" 이고 tmpdir 은 맥 APFS 다.
  * 검증이 자기 흔적을 남기지 않는 것이 기본이다.
  */
-const TEMP_DIRS: string[] = [];
+const tempWorkspaces = new TempWorkspaceRegistry();
 async function tempDir(prefix: string): Promise<string> {
-  const d = await mkdtemp(join(tmpdir(), prefix));
-  TEMP_DIRS.push(d);
-  return d;
+  return tempWorkspaces.create(prefix);
 }
 async function cleanupTempDirs(): Promise<void> {
-  for (const d of TEMP_DIRS) await rm(d, { recursive: true, force: true }).catch(() => {});
+  await tempWorkspaces.cleanup();
 }
 
 try {
@@ -252,7 +250,12 @@ try {
     const exe = new ToolExecutor(reg, DEFAULT_POLICY); // 감사 로그 없이 순수 실행 비용
     const ctx = { orgId: h.orgId, sessionId: "perf", projectRoot: dir };
     const s = await load(1000, 25, async (i) => {
-      await exe.execute(ctx, { id: `t${i}`, name: "read_file", arguments: { path: "target.ts" } });
+      const result = await exe.execute(ctx, { id: `t${i}`, name: "read_file", arguments: { path: "target.ts" } });
+      // ToolExecutor는 도구 실패를 소프트 결과로 돌려준다. ok를 확인하지 않으면
+      // 1000번 모두 jail 오류여도 load()는 성공 표본 1000개로 잘못 센다.
+      if (!result.ok || !result.output.includes("export const value")) {
+        throw new Error(`read_file did not return the fixture: ${result.output.slice(0, 160)}`);
+      }
     });
     console.log("  " + row("tool.read_file x1000 (c=25)", s));
     r.check("perf.tool_exec", complete(s) && s.p95 < 100, `p50=${s.p50}ms p95=${s.p95}ms, ${s.rps} rps, ${evidence(s)}`);

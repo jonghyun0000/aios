@@ -8,10 +8,11 @@
 ## 0. 30초 요약
 
 - **현재 제품:** AIOS 로컬 AI 작업공간. 사용자 시작기는 `AIOS 시작.command` → `http://127.0.0.1:8791`이며, 개발용 8790과 구분한다(§3).
-- **다음 작업:** [NEXT_STEPS.md](NEXT_STEPS.md)의 단계 0·1. 긴 과거 이력은 [CHANGELOG.md](CHANGELOG.md)에 원문 보존했다. 과거 성공을 새 변경의 검증으로 세지 않는다.
+- **다음 작업:** [NEXT_STEPS.md](NEXT_STEPS.md)의 **1-3 API 오류 분류**. 긴 과거 이력은 [CHANGELOG.md](CHANGELOG.md)에 원문 보존했다. 과거 성공을 새 변경의 검증으로 세지 않는다.
 - **Claude 변경(2026-09-19):** Fastify 5·관련 플러그인과 감사 게이트(`b9f12d9`), 인계 가이드(`174e2dc`). 의존성 감사 15→0, 정적4·단위464·실서버7·보안·브라우저123/3skip은 그 커밋의 기록이다(`docs/08` §15.5).
 - **이번 후속 작업 완료:** 운영 이미지 Node/pnpm 정렬·컨텍스트 보호. 실제 격리 기동/인증/종료, 정적4·단위464·추가회귀10 통과. 인계 원문101줄 보존 확인. 범위·경고·실패 기록은 [docs/30-container-build.md](docs/30-container-build.md).
-- **남은 P0:** tmpdir 실경로 하네스, 잘못된 UUID/연결 종료 오류 분류, e2e 서버 전제, pnpm 없는 시작기 안내(NEXT_STEPS 1-2~1-5).
+- **1-2 완료(2026-09-22):** 하네스 임시 작업공간을 실경로로 통일하고 정확한 경로만 정리한다. 결함 주입 검출, phase4 48/48, phase7 36/36×3, phase6 16/16, s2 시나리오 23/23, 정적4·단위465 PASS. 근거 `docs/32`.
+- **남은 P0:** 잘못된 UUID/연결 종료 오류 분류, e2e 서버 전제, pnpm 없는 시작기 안내(NEXT_STEPS 1-3~1-5).
 - **공개 상태:** GitHub `jonghyun0000/aios`; 체험판 `https://aios-demo-mu.vercel.app`은 가상 응답/파일만 쓰는 별도 정적 앱이다. push가 체험판을 재배포하지 않는다.
 - **공개 반영(2026-09-20):** 사용자 승인으로 `15218c0`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35476338497)가 성공했다. Vercel 재배포는 미실행이다.
 - **현재 기동 정상(2026-09-20):** 사용자 승인 후 Colima 정상 재시작으로 T7 공유 오류 복구. 사용자 시작기로 API·워커 ready, 통계 화면4검사·채팅 응답/저장3회 확인. 신규 자료 적재는 별도이며 [docs/31](docs/31-bigdata-connection.md)에 기록했다.
@@ -191,9 +192,10 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 28 | 4단계 실패 보존·보안 | 불확실한 DB 작업 종료 시 maintenance.lock을 보존한다. 자동 삭제 금지. HMAC 키 없으면 복원 불가; 키·백업 모두 변조 가능한 로컬 사용자 방어는 아님. 실패 .partial/복원 DB·폴더는 남아 용량 관리 필요 |
 | 29 | 의존성 감사 게이트 범위 | high 이상·프로덕션 의존성만 차단. moderate/low·개발 전용은 통과. `pnpm audit` 는 npm 권고 서비스 가용성에 의존. 권고의 실제 악용 시험은 하지 않았다 |
 | 30 | **운영 이미지 빌드 불가 — 수정·격리 기동 검증 완료(2026-09-19)** | 기존 Node20/engines22 충돌을 clean HEAD에서 재현한 뒤 Node22·pnpm9.12.0으로 정렬했다. 실제 api 이미지 빌드·격리 `/healthz`/`readyz` 200·인증 401·일반 사용자 실행·종료0, 버전 계약 결함 주입과 Docker 컨텍스트 제외 시험 확인. CI에는 정적 버전 계약만 추가했으며 2026-09-20 `15218c0` 원격 CI audit·verify 성공. msgpackr 선택 네이티브 경고/가속 미사용은 남고 worker·migrate·amd64·실제 모델은 이번 범위 밖이다. 원인/실패/근거: `docs/30-container-build.md` |
-| 31 | 검증 하네스 ↔ 도구 jail 충돌(macOS) | `packages/tools/src/builtin/fs.ts:48` 은 `realpath(root) !== root` 이면 "workspace root must not contain symbolic links" 로 거부한다. macOS `tmpdir()` 는 항상 `/var/…`(→`/private/var`) 심볼릭 경로라 `mkdtemp(tmpdir())` 로 루트를 만드는 하네스가 걸린다. **phase7 이 `TMPDIR` 미정규화 시 34/35 로 실패**(주입 방어 시험이 도구 오류를 받고 답을 못 함). `TMPDIR=$(node -p 'require("fs").realpathSync(require("os").tmpdir())')` 로 정규화하면 PASS. 다른 하네스(phase4·5·6, s2-scenario)도 같은 패턴이 있을 수 있다 — 미점검 |
+| 31 | 검증 하네스 ↔ 도구 jail 충돌(macOS) — **수정·검증 완료(2026-09-22)** | 제품 jail은 유지하고 phase4·5·6·7·s2 하네스가 공용 실경로 임시 작업공간과 정확한 정리를 쓴다. phase7의 실제 fixture 읽기 단언과 phase6의 `ToolResult.ok` 검사를 추가했다. 정규화를 모두 제거한 결함 주입에서 신규 시험 0/1 실패, 원복 `cmp` 일치. `TMPDIR` 우회 없이 phase4 48/48, phase7 36/36×3, phase6 16/16, s2 23/23, 정적4·단위465 PASS. 과거 34/35 실패 뒤 최신 35/35 거짓 PASS도 보존한다. 상세 `docs/32-tmpdir-harness.md` |
 | 32 | API 오류 분류 잡음 | (a) 클라이언트가 응답 전에 연결을 끊으면(화면 전환) 서버가 `unhandled error`(level 50)를 남긴다 — bigdata 조회에서 재현·통제군 확인. (b) 형식이 잘못된 UUID 경로(`/v1/sessions/undefined/messages`)가 400/404 가 아니라 **500 `internal`** 이다. 둘 다 `server.ts` 의 `setErrorHandler` 가 `AiosError`/`ZodError` 만 분류하기 때문 — 진짜 장애와 구분되지 않는다. 사용자 영향은 확인하지 못했고 Fastify 버전과 무관한 앱 로직으로 판단하지만, 4.x 에서의 재현은 하지 않았다 |
 | 33 | Colima T7 공유 연결 실패 — 현재 복구(2026-09-20) | 사용자 승인 후 `colima stop` → `colima start`로 VM에서 T7 경로 stat 정상, 시작기 bind probe 통과. 같은 기존 DB/Redis 컨테이너가 healthy, API·워커 ready, 통계 브라우저4/4·채팅 응답/저장3/3. 삭제·초기화·공유 설정 변경 없음. 재연결 후 재발 가능성과 원인 자체는 미해결이며 신규 자료 적재와는 구분한다. 상세 `docs/31-bigdata-connection.md` |
+| 34 | phase5 전체 시나리오의 기존 실패(1-2와 분리) | 2026-09-22 우회 없는 tmpdir 점검에서 파일 도구 경로는 정상이나 29/31. 로컬 모델이 첫 함수의 named export를 빠뜨렸고, `step8.context_assembled`는 현재 `# Reference excerpts` 대신 옛 `Relevant code` 문자열을 찾는다. tmpdir 수정 범위에서 고치거나 성공으로 바꾸지 않았다. `docs/32` §6 |
 
 ---
 

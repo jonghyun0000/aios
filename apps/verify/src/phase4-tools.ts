@@ -5,8 +5,7 @@
  * 도구 엔진의 가치는 성공 경로가 아니라 실패를 어떻게 가두느냐에 있다.
  */
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -16,11 +15,13 @@ import {
 } from "@aios/tools";
 import type { ExecutionPolicy, ToolAuditRecord } from "@aios/tools";
 import { Report } from "./report.js";
+import { TempWorkspaceRegistry } from "./temp-workspaces.js";
 
 const exec = promisify(execFile);
 const r = new Report("PHASE 4 — Tool Engine");
 
-const root = await mkdtemp(join(tmpdir(), "aios-tools-"));
+const tempWorkspaces = new TempWorkspaceRegistry();
+const root = await tempWorkspaces.create("aios-tools-");
 const audit: ToolAuditRecord[] = [];
 const registry = new ToolRegistry();
 registry.register(readFileTool);
@@ -137,7 +138,7 @@ try {
   // ---------- 4.6 Git ----------
   r.section("4.6 Git auto-commit");
   await r.guard("git", async () => {
-    const repo = await mkdtemp(join(tmpdir(), "aios-git-"));
+    const repo = await tempWorkspaces.create("aios-git-");
     await exec("git", ["init", "-q", "-b", "main"], { cwd: repo });
     await exec("git", ["config", "user.email", "t@t.local"], { cwd: repo });
     await exec("git", ["config", "user.name", "t"], { cwd: repo });
@@ -179,7 +180,7 @@ try {
       // /var/folders(OS 임시 디렉토리)는 컨테이너에서 빈 디렉토리로 보인다.
       // 프로덕션(Linux)에서는 제약이 없지만, 검증은 실제로 마운트되는 경로에서 해야 의미가 있다.
       const home = process.env.HOME ?? root;
-      const mountRoot = await mkdtemp(join(home, ".aios-sandbox-verify-"));
+      const mountRoot = await tempWorkspaces.create(".aios-sandbox-verify-", home);
       await mkdir(join(mountRoot, "src"), { recursive: true });
       await writeFile(join(mountRoot, "src", "app.ts"), "export const x = 1;\n");
       const sandboxCtx = { ...baseCtx, projectRoot: mountRoot };
@@ -356,7 +357,7 @@ await rpc("tools.register", { name: "try_forbidden_host", description: "attempt 
     r.check("plugin.unload_removes_tools", pluginReg.list().length === 0, "tools withdrawn on stop");
   });
 } finally {
-  /* tmp dirs는 OS가 정리 */
+  await tempWorkspaces.cleanup();
 }
 
 r.finish();
