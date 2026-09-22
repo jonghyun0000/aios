@@ -45,7 +45,13 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext): void 
     const configured = Object.keys(PROVIDERS).filter((name) => {
       try { credsFor(ctx, name); return true; } catch { return false; }
     });
-    return { providers: configured, sessionTtlDays: ctx.env.AUTH_SESSION_TTL_DAYS };
+    // 검증 오케스트레이터가 e2e 전제를 DB 변경 없이 판별한다. /v1/me를 익명 호출하면
+    // LOCAL_NO_AUTH 경로가 최초 조직을 만들 수 있어 읽기 전용 capability 신호가 아니다.
+    return {
+      providers: configured,
+      sessionTtlDays: ctx.env.AUTH_SESSION_TTL_DAYS,
+      authMode: ctx.env.LOCAL_NO_AUTH ? "local-no-auth" : "credentials-required",
+    };
   });
 
   app.get("/v1/auth/:provider/start", async (req, reply) => {

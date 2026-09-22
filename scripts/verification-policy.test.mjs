@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createServer } from "node:http";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
@@ -81,6 +82,93 @@ async function cliFixture(t, childSource) {
   await writeFile(child, `#!/usr/bin/env node\n${childSource}\n`); await chmod(child, 0o700);
   return join(root, "scripts/verify-all.mjs");
 }
+
+async function e2eServerFixture(t, { status, authMode, disconnectProviders = false }) {
+  const seen = [];
+  const server = createServer((req, res) => {
+    seen.push(req.url);
+    if (req.url === "/healthz") {
+      res.writeHead(200, { "content-type": "application/json" }); res.end('{"ok":true}'); return;
+    }
+    if (req.url === "/v1/auth/providers") {
+      if (disconnectProviders) { req.socket.destroy(); return; }
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(status === 200 ? JSON.stringify({ providers: [], authMode }) : '{"error":{"code":"unavailable"}}'); return;
+    }
+    res.writeHead(404); res.end();
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
+  const address = server.address();
+  return { baseUrl: `http://127.0.0.1:${address.port}`, seen };
+}
+
+test("실제 CLI: e2e는 키 인증 서버를 자식 실행 전에 BLOCKED로 분류한다", async t => {
+  const fixtureScript = await cliFixture(t, "process.exit(0);");
+  const server = await e2eServerFixture(t, { status: 200, authMode: "credentials-required" });
+  await assert.rejects(exec(process.execPath, [fixtureScript, "e2e"], {
+    timeout: 10_000,
+    env: { ...process.env, AIOS_BASE_URL: server.baseUrl, AIOS_API_KEY: "synthetic-not-a-real-key" },
+  }), error => {
+    assert.equal(error.code, 2);
+    assert.match(error.stdout, /BLOCKED Browser E2E/);
+    assert.match(error.stdout, /LOCAL_NO_AUTH=1/);
+    assert.match(error.stdout, /VERIFY: INCOMPLETE/);
+    assert.doesNotMatch(error.stdout, /RUN\s+Browser E2E/);
+    assert.deepEqual(server.seen, ["/healthz", "/v1/auth/providers"]);
+    return true;
+  });
+});
+
+test("실제 CLI: LOCAL_NO_AUTH 서버의 e2e는 API 키 없이 자식을 실행한다", async t => {
+  const fixtureScript = await cliFixture(t, "process.exit(0);");
+  const server = await e2eServerFixture(t, { status: 200, authMode: "local-no-auth" });
+  const { stdout } = await exec(process.execPath, [fixtureScript, "e2e"], {
+    timeout: 10_000,
+    env: { ...process.env, AIOS_BASE_URL: server.baseUrl, AIOS_API_KEY: "" },
+  });
+  assert.match(stdout, /RUN\s+Browser E2E/);
+  assert.match(stdout, /VERIFY: PASS/);
+  assert.deepEqual(server.seen, ["/healthz", "/v1/auth/providers"]);
+});
+
+test("실제 CLI: 인증 capability 오응답과 연결 끊김도 e2e 자식 실행 전에 차단한다", async t => {
+  for (const serverOptions of [
+    { status: 200, authMode: "unknown-mode" },
+    { status: 503, authMode: undefined },
+    { status: 200, authMode: undefined, disconnectProviders: true },
+  ]) {
+    const fixtureScript = await cliFixture(t, "process.exit(99);");
+    const server = await e2eServerFixture(t, serverOptions);
+    await assert.rejects(exec(process.execPath, [fixtureScript, "e2e"], {
+      timeout: 10_000,
+      env: { ...process.env, AIOS_BASE_URL: server.baseUrl, AIOS_API_KEY: "" },
+    }), error => {
+      assert.equal(error.code, 2);
+      assert.match(error.stdout, /BLOCKED Browser E2E/);
+      assert.match(error.stdout, /LOCAL_NO_AUTH=1/);
+      assert.match(error.stdout, /VERIFY: INCOMPLETE/);
+      assert.doesNotMatch(error.stdout, /RUN\s+Browser E2E/);
+      assert.deepEqual(server.seen, ["/healthz", "/v1/auth/providers"]);
+      return true;
+    });
+  }
+});
+
+test("실제 CLI: 잘못된 API 주소도 스택 없이 e2e 자식 실행 전에 차단한다", async t => {
+  const fixtureScript = await cliFixture(t, "process.exit(99);");
+  await assert.rejects(exec(process.execPath, [fixtureScript, "e2e"], {
+    timeout: 10_000,
+    env: { ...process.env, AIOS_BASE_URL: "%%%not-a-url%%%", AIOS_API_KEY: "" },
+  }), error => {
+    assert.equal(error.code, 2);
+    assert.match(error.stdout, /BLOCKED Browser E2E/);
+    assert.match(error.stdout, /LOCAL_NO_AUTH=1/);
+    assert.match(error.stdout, /VERIFY: INCOMPLETE/);
+    assert.doesNotMatch(error.stdout, /RUN\s+Browser E2E|ERR_INVALID_URL|TypeError/);
+    return true;
+  });
+});
 test("실제 CLI: 자식 종료0이어도 검사 중 실제 코드 바이트가 바뀌면 PASS를 거부한다", async t => {
   const fixtureScript = await cliFixture(t, "require('node:fs').appendFileSync('apps/api/src/fixture.ts', '// changed during check\\n');");
   await assert.rejects(exec(process.execPath, [fixtureScript, "build"], { timeout: 10_000 }), error => {

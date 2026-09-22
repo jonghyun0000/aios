@@ -55,6 +55,7 @@ const STEPS = [
   // 브라우저 바이너리는 T7에 있다(Mac 내장 디스크는 여유가 없다).
   { id: "e2e", label: "Browser E2E", cmd: "pnpm", args: ["--filter", "@aios/web", "test:e2e"],
     needsServer: true,
+    needsLocalNoAuth: true,
     env: { PLAYWRIGHT_BROWSERS_PATH: "/Volumes/T7/bigdata/playwright-browsers" } },
   { id: "phase6", label: "Performance", cmd: "pnpm", args: ["--filter", "@aios/verify", "phase6"] },
   { id: "phase7", label: "Security", cmd: "pnpm", args: ["--filter", "@aios/verify", "phase7"] },
@@ -102,9 +103,21 @@ const providerKeys = {
   xai: Boolean(process.env.XAI_API_KEY),
 };
 const hasProviderFor = (need) => (typeof need === "string" ? providerKeys[need] === true : anyProvider);
-// 실행 중인 API 서버가 필요한 단계는 주소와 키가 둘 다 있어야 의미가 있다.
-// 없으면 SKIP으로 표시한다 — 서버가 없어서 실패한 것을 제품 결함으로 기록하면 안 된다.
-const hasServer = Boolean(process.env.AIOS_BASE_URL && process.env.AIOS_API_KEY);
+// 대부분의 서버 단계는 주소와 키가 모두 필요하다. 브라우저 e2e만 예외다. 일부 스펙이
+// 인증 헤더 없는 독립 request를 쓰므로 LOCAL_NO_AUTH=1 서버여야 하고, 그 서버에는 키가 필요 없다.
+const hasServerAddress = Boolean(process.env.AIOS_BASE_URL);
+const hasServerKey = Boolean(process.env.AIOS_API_KEY);
+
+async function fetchApi(path) {
+  try {
+    return await fetch(new URL(path, process.env.AIOS_BASE_URL), {
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch {
+    // 잘못된 base URL, 연결 거부, timeout 모두 단계 실행 전 BLOCKED로 분류한다.
+    return null;
+  }
+}
 
 /**
  * pnpm 실행 파일 해석.
@@ -165,8 +178,11 @@ for (const step of selection.steps) {
     results.push({ ...step, status: "SKIP" });
     continue;
   }
-  if (step.needsServer && !hasServer) {
-    console.log(`SKIP  ${step.label} — set AIOS_BASE_URL and AIOS_API_KEY (running API server required)`);
+  if (step.needsServer && (!hasServerAddress || (!step.needsLocalNoAuth && !hasServerKey))) {
+    const required = step.needsLocalNoAuth
+      ? "set AIOS_BASE_URL to a running LOCAL_NO_AUTH=1 API server"
+      : "set AIOS_BASE_URL and AIOS_API_KEY (running API server required)";
+    console.log(`SKIP  ${step.label} — ${required}`);
     results.push({ ...step, status: "SKIP" });
     continue;
   }
@@ -177,19 +193,43 @@ for (const step of selection.steps) {
    * 그러면 이후 서버 의존 단계들이 전부 `fetch failed` 수십 줄로 실패하고,
    * 진짜 원인("서버가 이미 죽어 있었다")은 그 잡음에 묻힌다.
    * 죽었으면 여기서 한 줄로 말하고, 어느 단계 다음에 죽었는지도 남긴다.
-   */
+  */
   if (step.needsServer) {
-    const alive = await fetch(new URL("/healthz", process.env.AIOS_BASE_URL), {
-      signal: AbortSignal.timeout(5_000),
-    }).then((r) => r.ok).catch(() => false);
+    const health = await fetchApi("/healthz");
+    const alive = health?.ok === true;
     if (!alive) {
       const after = results.filter((r) => r.status === "PASS").pop();
+      const authHint = step.needsLocalNoAuth
+        ? " 이 e2e는 LOCAL_NO_AUTH=1로 띄운 전용 서버가 필요하다."
+        : "";
       console.log(
-        `BLOCKED ${step.label} — API 서버가 응답하지 않는다(${process.env.AIOS_BASE_URL}). ` +
+        `BLOCKED ${step.label} — API 서버 주소가 잘못됐거나 서버가 응답하지 않는다.` + authHint + " " +
         `마지막 성공 단계: ${after ? after.label : "없음"}. ` +
         `프로세스가 죽었다면 ~/Library/Logs/DiagnosticReports 의 node-*.ips 를 확인하라.`,
       );
       results.push({ ...step, status: "BLOCKED", blockReason: "API 서버 무응답" });
+      continue;
+    }
+  }
+  if (step.needsLocalNoAuth) {
+    // providers는 공개·읽기 전용이고 DB를 건드리지 않는다. /v1/me로 판별하면 로컬 모드의
+    // 최초 요청이 조직을 INSERT … ON CONFLICT 하므로 사전 검사가 사용자 상태를 바꾸게 된다.
+    const response = await fetchApi("/v1/auth/providers");
+    const authMode = response ? {
+      status: response.status,
+      mode: response.ok ? await response.json().then((body) => body?.authMode).catch(() => undefined) : undefined,
+    } : null;
+    if (!authMode || authMode.status !== 200 || authMode.mode !== "local-no-auth") {
+      const observed = !authMode
+        ? "인증 모드 판별 요청 실패"
+        : authMode.mode === "credentials-required"
+          ? "키/세션 인증 서버"
+          : `LOCAL_NO_AUTH 문맥을 확인할 수 없는 응답(status ${authMode.status})`;
+      console.log(
+        `BLOCKED ${step.label} — ${observed}. 이 e2e는 인증 헤더 없는 API 요청을 포함하므로 ` +
+        "LOCAL_NO_AUTH=1로 띄운 전용 서버가 필요하다. 브라우저 검사를 실행하지 않았다.",
+      );
+      results.push({ ...step, status: "BLOCKED", blockReason: "키 없는 로컬 서버 전제 불일치" });
       continue;
     }
   }

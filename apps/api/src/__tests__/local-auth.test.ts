@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import Fastify from "fastify";
+import { describe, expect, it, vi } from "vitest";
 import { loadEnv } from "@aios/shared";
 import { isLoopback, isLocalBrowserRequest } from "../auth.js";
+import type { AppContext } from "../context.js";
+import { registerAuthRoutes } from "../routes/auth.js";
 
 /**
  * 무인증 모드의 두 안전장치를 고정한다.
@@ -68,5 +71,25 @@ describe("LOCAL_NO_AUTH 파싱", () => {
 
   it("프로덕션이어도 꺼져 있으면 통과한다", () => {
     expect(loadEnv({ ...baseEnv, NODE_ENV: "production" }).NODE_ENV).toBe("production");
+  });
+});
+
+describe("공개 인증 capability", () => {
+  it.each([
+    { local: true, expected: "local-no-auth" },
+    { local: false, expected: "credentials-required" },
+  ])("LOCAL_NO_AUTH=$local을 DB 접근 없이 $expected로 공개한다", async ({ local, expected }) => {
+    const query = vi.fn();
+    const app = Fastify();
+    registerAuthRoutes(app, {
+      env: { LOCAL_NO_AUTH: local, AUTH_SESSION_TTL_DAYS: 30 },
+      pool: { query },
+    } as unknown as AppContext);
+    try {
+      const response = await app.inject("/v1/auth/providers");
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ providers: [], sessionTtlDays: 30, authMode: expected });
+      expect(query).not.toHaveBeenCalled();
+    } finally { await app.close(); }
   });
 });

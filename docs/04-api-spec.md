@@ -135,5 +135,9 @@ close 코드: `4400` doc 파라미터 누락 · `4401` 인증 실패 · `4403` m
 | GET | `/v1/auth/session` | 세션 토큰 |
 | POST | `/v1/auth/logout` | 세션 토큰 |
 
+`GET /v1/auth/providers`는 `providers`, `sessionTtlDays`와 함께 현재 인증 전제를 나타내는
+`authMode`(`local-no-auth` 또는 `credentials-required`)를 반환한다. 이 공개 capability는
+환경 설정만 읽고 DB를 변경하지 않으며, 로그인 자격증명이나 키를 노출하지 않는다.
+
 세션 토큰은 `aios_sess_` 접두사를 가지며, `Authorization: Bearer`와 HttpOnly 쿠키
 (`aios_session`) 양쪽으로 받는다. 일반 API 라우트에서도 그대로 인증 수단이 된다.
