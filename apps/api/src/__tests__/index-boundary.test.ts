@@ -1,6 +1,5 @@
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AiosError } from "@aios/shared";
 import type { AppContext } from "../context.js";
 
 const mocks = vi.hoisted(() => ({ realpath: vi.fn(), lstat: vi.fn(), enqueue: vi.fn() }));
@@ -8,6 +7,7 @@ vi.mock("node:fs/promises", async (original) => ({ ...await original<typeof impo
 vi.mock("../queue.js", () => ({ enqueueIndexJob: mocks.enqueue }));
 import { validateIndexRoot, runIndexJob } from "../index-boundary.js";
 import { registerCoreRoutes } from "../routes/core.js";
+import { installApiErrorHandler } from "../api-error-handler.js";
 
 const root = "/fixture/workspace";
 const projectId = "10000000-0000-4000-8000-000000000001";
@@ -23,14 +23,29 @@ beforeEach(() => {
 function fixture(role: "viewer" | "member" = "member") {
   const query = vi.fn(async (sql: string) => ({ rows: [{ id: sql.includes("organizations") ? "org" : projectId }] }));
   const indexProject = vi.fn(async () => ({ added: 1, updated: 0, removed: 0 }));
-  const ctx = { env: { LOCAL_WORKSPACE_ROOT: root, LOCAL_NO_AUTH_ORG_SLUG: "local" }, pool: { query }, indexer: { indexProject } } as unknown as AppContext;
+  const retrieve = vi.fn(async () => []);
+  const ctx = { env: { LOCAL_WORKSPACE_ROOT: root, LOCAL_NO_AUTH_ORG_SLUG: "local" }, pool: { query }, indexer: { indexProject }, retriever: { retrieve } } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId: "org", role, via: "api_key", scopes: ["*"] }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
+  installApiErrorHandler(app);
   registerCoreRoutes(app, ctx);
-  return { app, ctx, query, indexProject };
+  return { app, ctx, query, indexProject, retrieve };
 }
 describe("색인 API와 워커의 로컬 조직·실제 파일 경계 (FS/DB 대역)", () => {
+  it.each([
+    { method: "POST" as const, url: "/v1/projects/not-a-uuid/index", payload: { rootDir: root } },
+    { method: "GET" as const, url: "/v1/projects/not-a-uuid/search?q=fixture" },
+  ])("$method $url은 잘못된 UUID를 DB 전에 400으로 거부한다", async (request) => {
+    const f = fixture();
+    try {
+      const response = await f.app.inject(request);
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "validation_error", retryable: false } });
+      expect(f.query).not.toHaveBeenCalled();
+      expect(mocks.enqueue).not.toHaveBeenCalled();
+      expect(f.retrieve).not.toHaveBeenCalled();
+    } finally { await f.app.close(); }
+  });
   it("viewer는 큐/DB 접근 전에 거부된다", async () => {
     const f = fixture("viewer");
     try {

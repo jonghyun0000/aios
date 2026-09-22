@@ -8,6 +8,10 @@ import { enqueueIndexJob } from "../queue.js";
 import { registerWorkspaceRoutes } from "./workspace.js";
 import { validateIndexRoot } from "../index-boundary.js";
 
+// UUID 컬럼을 사용하는 경로는 DB에 원문을 넘기기 전에 같은 경계에서 검증한다.
+// PostgreSQL 22P02를 500으로 뒤늦게 분류하면 잘못된 사용자 입력이 장애 경보가 된다.
+const UuidParamsSchema = z.object({ id: z.string().uuid() });
+
 /** 세션/프로젝트/검색/메모리/모델/사용량/빌링 — CRUD성 라우트 모음 */
 export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void {
   registerWorkspaceRoutes(app, ctx);
@@ -25,7 +29,7 @@ export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void 
 
   app.post("/v1/projects/:id/index", async (req, reply) => {
     requireRole(req.auth, "member");
-    const { id } = req.params as { id: string };
+    const { id } = UuidParamsSchema.parse(req.params);
     const body = z.object({ rootDir: z.string() }).parse(req.body);
     const rootDir = await validateIndexRoot(ctx, id, req.auth.orgId, body.rootDir);
     const jobId = await enqueueIndexJob(ctx, { projectId: id, rootDir, orgId: req.auth.orgId });
@@ -33,7 +37,7 @@ export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void 
   });
 
   app.get("/v1/projects/:id/search", async (req) => {
-    const { id } = req.params as { id: string };
+    const { id } = UuidParamsSchema.parse(req.params);
     const q = z.object({ q: z.string().min(1), k: z.coerce.number().max(30).default(8) }).parse(req.query);
     const owned = await ctx.pool.query(`select 1 from projects where id = $1 and org_id = $2`, [id, req.auth.orgId]);
     if (owned.rowCount === 0) throw new NotFoundError("project");
@@ -68,7 +72,7 @@ export function registerCoreRoutes(app: FastifyInstance, ctx: AppContext): void 
 
   app.delete("/v1/memory/:id", async (req) => {
     requireRole(req.auth, "member");
-    const { id } = req.params as { id: string };
+    const { id } = UuidParamsSchema.parse(req.params);
     const deleted = await ctx.memory.ltm.forget(id, req.auth.orgId);
     if (!deleted) throw new NotFoundError("memory item");
     return { ok: true };

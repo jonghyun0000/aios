@@ -1,8 +1,8 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import { AiosError } from "@aios/shared";
 import type { AppContext } from "../context.js";
 import { registerCoreRoutes } from "../routes/core.js";
+import { installApiErrorHandler } from "../api-error-handler.js";
 
 const id = "10000000-0000-4000-8000-000000000001";
 function fixture(role: "viewer" | "member") {
@@ -12,7 +12,7 @@ function fixture(role: "viewer" | "member") {
   const ctx = { pool: { query, connect: async () => ({ query, release() {} }) }, memory: { ltm: { remember, forget } } } as unknown as AppContext;
   const app = Fastify();
   app.addHook("preHandler", async (req) => { req.auth = { orgId: "org", role, via: "session", scopes: ["*"] }; });
-  app.setErrorHandler((err, _, reply) => reply.code(err instanceof AiosError ? err.status : 500).send({ error: (err as Error).message }));
+  installApiErrorHandler(app);
   registerCoreRoutes(app, ctx);
   return { app, query, remember, forget };
 }
@@ -26,6 +26,16 @@ const changes = [
 ];
 
 describe("viewer는 읽기 전용 — 실제 라우트, DB/메모리 대역", () => {
+  it("member의 잘못된 memory UUID는 삭제 호출 전에 400으로 거부한다", async () => {
+    const f = fixture("member");
+    try {
+      const response = await f.app.inject({ method: "DELETE", url: "/v1/memory/not-a-uuid" });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "validation_error", retryable: false } });
+      expect(f.query).not.toHaveBeenCalled();
+      expect(f.forget).not.toHaveBeenCalled();
+    } finally { await f.app.close(); }
+  });
   it.each(changes)("$method $url은 viewer의 저장·삭제 전에 403", async (request) => {
     const f = fixture("viewer");
     try {
