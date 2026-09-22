@@ -1,5 +1,7 @@
 # CHANGELOG — 인계 이력 보존
 
+2026-09-22: NEXT_STEPS 1-4를 완료했다. `9107f28`에서 공개·DB 비변경 `/v1/auth/providers` capability로 Browser E2E의 서버 인증 모드를 사전 판별한다. 로컬 무인증 서버는 API 키 없이 자식을 실행하고, 키 인증·오응답·503·연결 끊김·잘못된 base URL은 Playwright 전에 BLOCKED/INCOMPLETE로 끝난다. 사전 검사 제거와 모드 고정 결함 주입, API11/11·오케스트레이터15/15·정적4·단위475/475 결과를 `docs/34-e2e-server-precondition.md`에 보존했다. 실제 Chromium 123개는 재실행하지 않았고 push하지 않았다.
+
 2026-09-22: NEXT_STEPS 1-3을 완료했다. `3a02beb`에서 메시지 세션 ID를 PostgreSQL 전에 UUID로 검증하고, 실제 클라이언트 연결 종료의 제한된 전송 오류만 서버 장애 로그에서 분리했다. 전체 HTTP path-param 감사에서 core UUID 경로 3개를 추가 발견해 `6107a70`에서 함께 수정했다. 실제 PG 전후·세 종류 결함 주입·관련83/83·정적4·단위473/473 결과와 최초 실패는 `docs/33-api-error-classification.md`에 보존했다. push하지 않았다.
 
 2026-09-22: NEXT_STEPS 1-2를 진행했다. macOS tmpdir 별칭을 제품 jail에서 예외 처리하지 않고, 검증 하네스 공용 작업공간이 실제 경로를 사용하고 자신이 만든 정확한 경로만 정리하도록 수정했다. phase7의 파일 읽기 거짓 양성과 phase6의 소프트 오류 1000회 거짓 성공을 함께 차단했다. 결함 주입·실행 수치와 별도 phase5 기존 실패는 `docs/32-tmpdir-harness.md`에 보존했다. 사용자는 제품 방향을 **공개 오픈소스·포트폴리오**로 확정했다.

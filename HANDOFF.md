@@ -8,19 +8,20 @@
 ## 0. 30초 요약
 
 - **현재 제품:** AIOS 로컬 AI 작업공간. 사용자 시작기는 `AIOS 시작.command` → `http://127.0.0.1:8791`이며, 개발용 8790과 구분한다(§3).
-- **다음 작업:** [NEXT_STEPS.md](NEXT_STEPS.md)의 **1-4 e2e 서버 전제**. 긴 과거 이력은 [CHANGELOG.md](CHANGELOG.md)에 원문 보존했다. 과거 성공을 새 변경의 검증으로 세지 않는다.
+- **다음 작업:** [NEXT_STEPS.md](NEXT_STEPS.md)의 **1-5 dev-up.sh의 조용한 pnpm 실패**. 긴 과거 이력은 [CHANGELOG.md](CHANGELOG.md)에 원문 보존했다. 과거 성공을 새 변경의 검증으로 세지 않는다.
 - **Claude 변경(2026-09-19):** Fastify 5·관련 플러그인과 감사 게이트(`b9f12d9`), 인계 가이드(`174e2dc`). 의존성 감사 15→0, 정적4·단위464·실서버7·보안·브라우저123/3skip은 그 커밋의 기록이다(`docs/08` §15.5).
 - **이번 후속 작업 완료:** 운영 이미지 Node/pnpm 정렬·컨텍스트 보호. 실제 격리 기동/인증/종료, 정적4·단위464·추가회귀10 통과. 인계 원문101줄 보존 확인. 범위·경고·실패 기록은 [docs/30-container-build.md](docs/30-container-build.md).
 - **1-2 완료(2026-09-22):** 하네스 임시 작업공간을 실경로로 통일하고 정확한 경로만 정리한다. 결함 주입 검출, phase4 48/48, phase7 36/36×3, phase6 16/16, s2 시나리오 23/23, 정적4·단위465 PASS. 근거 `docs/32`.
 - **1-3 완료(2026-09-22):** 실제 TCP 이탈만 debug로 분류하고 HTTP path-param 전체 감사에서 UUID DB 경로 5개를 모두 DB 전에 400으로 거부한다. 결함 주입 3종, 실제 PG 전후, 관련83/83, 정적4·단위473 PASS. 근거 `docs/33`, 구현 `3a02beb`·`6107a70`.
-- **남은 P0:** 잘못된 UUID/연결 종료 오류 분류, e2e 서버 전제, pnpm 없는 시작기 안내(NEXT_STEPS 1-3~1-5).
+- **1-4 완료(2026-09-22):** Browser E2E는 공개·읽기 전용 인증 capability로 `LOCAL_NO_AUTH=1` 서버만 실행한다. 키 인증·판별 불가·잘못된 URL은 자식 전에 BLOCKED/INCOMPLETE. 결함 주입, 오케스트레이터15/15, 정적4·단위475 PASS. 실제 Chromium은 미실행. 근거 `docs/34`, 구현 `9107f28`.
+- **남은 P0:** pnpm 없는 시작기의 원인·해결 안내(NEXT_STEPS 1-5).
 - **공개 상태:** GitHub `jonghyun0000/aios`; 체험판 `https://aios-demo-mu.vercel.app`은 가상 응답/파일만 쓰는 별도 정적 앱이다. push가 체험판을 재배포하지 않는다.
 - **공개 반영(2026-09-20):** 사용자 승인으로 `15218c0`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35476338497)가 성공했다. Vercel 재배포는 미실행이다.
 - **현재 기동 정상(2026-09-20):** 사용자 승인 후 Colima 정상 재시작으로 T7 공유 오류 복구. 사용자 시작기로 API·워커 ready, 통계 화면4검사·채팅 응답/저장3회 확인. 신규 자료 적재는 별도이며 [docs/31](docs/31-bigdata-connection.md)에 기록했다.
 - **점수:** 기존 90/100은 당시 AI 자체 평가(`docs/22`). 별도 약70±6 의견과 근거 한계는 NEXT_STEPS §1에 있다. 이번 작업으로 점수를 올리지 않는다.
 - **전제 변경:** M1 Air 판매로 두 번째 Mac이 없다. 다른 Mac 설치 근거는 미충족으로 두고 같은 Mac/CI 결과로 대체 가산하지 않는다.
 - **안전 경계:** 사용자 DB·작업 파일·설정 보존. phase8/legacy-full/운영 복원·과거 볼륨 삭제 금지. 새 시험 자원만 정확한 ID로 정리한다.
-- **환경 함정:** T7·pnpm PATH·Xcode 라이선스가 막힌 기본 git·TMPDIR·키 없는 e2e 전제는 NEXT_STEPS §3.1과 아래 §8을 따른다.
+- **환경 함정:** T7·pnpm PATH·Xcode 라이선스가 막힌 기본 git·TMPDIR·e2e의 `LOCAL_NO_AUTH=1` 전제는 NEXT_STEPS §3.1과 아래 §8을 따른다.
 
 ---
 
@@ -113,7 +114,7 @@ eval "$(./scripts/dev-up.sh --export-only)"; set -a; . ./.env.local; set +a
 | s3-collab · marketplace · billing · oauth · webui | Sprint 3 기능 | 서버 | 각 1~3s |
 | s4-bigdata · s5-bigdata-api | 데이터 계층 도구·HTTP | 서버(s5) | 1~5s |
 | s6-collab-multi | 협업 인스턴스 2개 실제 기동 | 서버 | 3s |
-| e2e | Playwright 126개 중123통과/3desktop 해당없음 (데스크톱·모바일, 합성 API 포함) | 서버 | 약2.5분 |
+| e2e | Playwright 126개 중123통과/3desktop 해당없음 (과거 실행, 데스크톱·모바일·합성 API 포함) | `LOCAL_NO_AUTH=1` 서버; `verify-all`이 사전 판별 | 약2.5분 |
 | phase6 | 성능·부하(로컬 LLM 동시 12스트림 포함) | — | 5~15분 |
 | phase7 | 보안(인젝션·샌드박스·RBAC·JWT) | — | 1~3분 |
 | phase8 | 배포 준비(이미지 새로 빌드·백업/복구·SIGTERM·롤백) | Docker | 2~5분 |
@@ -197,6 +198,7 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 32 | API 오류 분류 잡음 — **수정·검증 완료(2026-09-22)** | 실제 소켓 이탈의 제한된 오류만 debug로 분리하고 살아 있는 AbortError·일반 예외는 500+error를 유지한다. HTTP path-param 전체 감사에서 UUID DB 경로 5개를 모두 DB 전에 검증했다. 실제 PG에서 core 3경로 500→400·하위 호출0, 결함 주입 시 메시지2·TCP1·core3 시험 실패, 관련83/83·정적4·단위473 PASS. 8791 재기동·Fastify4·다른 OS/프록시는 미검증. 상세 `docs/33-api-error-classification.md` |
 | 33 | Colima T7 공유 연결 실패 — 현재 복구(2026-09-20) | 사용자 승인 후 `colima stop` → `colima start`로 VM에서 T7 경로 stat 정상, 시작기 bind probe 통과. 같은 기존 DB/Redis 컨테이너가 healthy, API·워커 ready, 통계 브라우저4/4·채팅 응답/저장3/3. 삭제·초기화·공유 설정 변경 없음. 재연결 후 재발 가능성과 원인 자체는 미해결이며 신규 자료 적재와는 구분한다. 상세 `docs/31-bigdata-connection.md` |
 | 34 | phase5 전체 시나리오의 기존 실패(1-2와 분리) | 2026-09-22 우회 없는 tmpdir 점검에서 파일 도구 경로는 정상이나 29/31. 로컬 모델이 첫 함수의 named export를 빠뜨렸고, `step8.context_assembled`는 현재 `# Reference excerpts` 대신 옛 `Relevant code` 문자열을 찾는다. tmpdir 수정 범위에서 고치거나 성공으로 바꾸지 않았다. `docs/32` §6 |
+| 35 | e2e 서버 인증 전제 오분류 — **수정·검증 완료(2026-09-22)** | `verify-all e2e`가 건강한 키 인증 서버를 실행해 제품 회귀처럼 보이던 실패를 만들었다. 공개·DB 비변경 capability가 `local-no-auth`일 때만 자식을 실행하며 키 인증·오응답·503·연결 끊김·잘못된 URL은 BLOCKED/INCOMPLETE다. 결함 주입, API11/11·오케스트레이터15/15·정적4·단위475 PASS. 실제 Chromium 123개는 이번 변경 뒤 미실행. 상세 `docs/34-e2e-server-precondition.md` |
 
 ---
 
@@ -221,7 +223,7 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 채점기가 정답을 오답 처리 | 정규식으로 TS 타입을 지우다 삼항 `: x` 를 먹음 | esbuild 트랜스파일 사용 |
 | 뚜껑 닫으면 작업 중단 | 잠자기(현재 잠자기 방지는 유휴만) | 오래 걸리는 작업 전 전원·`caffeinate -dimsu` 확인 |
 | 기기가 이유 없이 느리고 부하 평균 10~19 | **tsx 가 띄운 esbuild 서비스(`--service=0.28.1 --ping`)가 부모 node 가 죽은 뒤 고아로 남아 헛돈다.** 2026-09-07 에 SIGBUS·`kill -9` 로 서버를 정리하면서 2개가 생겨 **4일 반 동안 각 CPU 340%**(코어 약 7개)를 먹었다. SIGTERM 도 무시한다 | 아래 §11 의 점검 명령. 부모가 launchd(PPID 1)인 esbuild 는 전부 고아다 |
-| e2e 가 `session.id` 가 `undefined` 라며 7건 실패, 서버 로그에 `/v1/sessions/undefined/messages` | e2e 스펙은 `request.post("/v1/sessions")` 를 **인증 헤더 없이** 부른다 — **키 없는 서버(`LOCAL_NO_AUTH=1`)를 전제**한다. `dev-up.sh` 서버는 키 인증이라 401 | 키 없는 서버에 붙인다: `LOCAL_NO_AUTH=1 PORT=8792 pnpm --filter @aios/api dev` 후 `AIOS_BASE_URL=http://127.0.0.1:8792`. 그러면 123 PASS/3 skip |
+| e2e 가 `session.id` 가 `undefined` 라며 실패, 서버 로그에 `/v1/sessions/undefined/messages` | e2e 스펙은 `request.post("/v1/sessions")` 를 **인증 헤더 없이** 부른다 — **키 없는 서버(`LOCAL_NO_AUTH=1`)를 전제**한다. `dev-up.sh` 서버는 키 인증이라 401 | `verify-all e2e`는 이제 키 인증 서버를 자식 실행 전에 BLOCKED로 분류한다. 실행하려면 `LOCAL_NO_AUTH=1 PORT=8792 pnpm --filter @aios/api dev` 후 `AIOS_BASE_URL=http://127.0.0.1:8792`; API 키는 필요 없다. 과거 123 PASS/3 skip을 현재 통과로 재사용하지 않는다 |
 | `AIOS 시작.command` 가 "시작기 작업 폴더를 확인할 수 없습니다" | 시작기가 자기 프로세스의 cwd 를 `lsof` 류로 확인해 저장소 루트와 비교한다(`scripts/local-lifecycle.mjs:228`). 에이전트 하네스 하위 프로세스에서는 통과하지 못했다 | 사용자의 Finder 더블클릭/일반 터미널에서 실행. 에이전트는 위 키 없는 서버를 직접 띄운다 |
 | `dev-up.sh` 가 "API 서버가 뜨지 않았다", 로그에 `nohup: pnpm: No such file or directory` | 셸의 PATH 에 corepack 셔임이 없다(에이전트 셸은 사용자 프로필을 다 읽지 않을 수 있다) | `AGENTS.md` 의 `export PATH="…:/usr/local/lib/node_modules/corepack/shims:$PATH"` 를 먼저 실행한다. 확인: `command -v pnpm` → `/usr/local/lib/node_modules/corepack/shims/pnpm`. dev-up.sh 가 이걸 먼저 알려 주게 고치는 일은 NEXT_STEPS 1-5 |
 | 서버를 종료했는데 `pnpm … dev` / `tsx` 프로세스가 남아 있음(ppid=1) | 리스너 PID 만 종료하면 부모 래퍼와 tsx 자식이 고아가 된다 | 리스너가 아니라 **`--filter @aios/api dev` 래퍼 PID** 를 SIGTERM. 이후 §11 점검(`ps` 로 `esbuild` ppid=1 확인) |
