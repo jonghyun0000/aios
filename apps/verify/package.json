@@ -1,6 +1,7 @@
 {
   "name": "@aios/verify",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Production verification harnesses (Phase 1-8). Hits real providers and real infra.",

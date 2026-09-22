@@ -3,6 +3,7 @@
   "displayName": "AIOS",
   "description": "AIOS agent inside VSCode — chat, inline edits, codebase indexing",
   "version": "0.1.0",
+  "license": "MIT",
   "publisher": "aios",
   "private": true,
   "engines": { "vscode": "^1.90.0" },

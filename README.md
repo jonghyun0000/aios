@@ -136,3 +136,7 @@ GitHub CI는 이 로컬 환경 전체를 재현하지 않습니다. 자동 배�
 최근 전체 실행: **20 PASS / 0 FAIL / 1 SKIP** (2026-09-07). SKIP 은 `ANTHROPIC_API_KEY` 전용 단계다.
 프로바이더가 필요한 단계는 로컬 모델로도 돈다. 단계 목록·조건·소요 시간은 [HANDOFF.md](HANDOFF.md) §4,
 남은 위험은 [docs/final-verification-report.md](docs/final-verification-report.md) §7.
+
+## 라이선스
+
+AIOS의 자체 소스와 문서는 [MIT License](LICENSE)로 공개합니다. 제3자 의존성은 각각의 고유 라이선스를 따릅니다.

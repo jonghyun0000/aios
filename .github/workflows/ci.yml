@@ -70,7 +70,7 @@ jobs:
       - name: Portable unit tests with structured counts and explicit scope
         run: node scripts/verify-vitest.mjs unit
       - name: Read-only doctor and verification boundary tests
-        run: node --test scripts/dev-up.test.mjs scripts/doctor.test.mjs scripts/public-demo-policy.test.mjs scripts/verification-policy.test.mjs scripts/verification-report.test.mjs scripts/verify-vitest.test.mjs scripts/verify-app-a11y.test.mjs
+        run: node --test scripts/dev-up.test.mjs scripts/doctor.test.mjs scripts/license-policy.test.mjs scripts/public-demo-policy.test.mjs scripts/verification-policy.test.mjs scripts/verification-report.test.mjs scripts/verify-vitest.test.mjs scripts/verify-app-a11y.test.mjs
       - name: Install Chromium for isolated browser tests
         run: pnpm --filter @aios/web exec playwright install --with-deps chromium
       - name: Public demo browser regression

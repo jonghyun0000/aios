@@ -2,6 +2,7 @@
   "name": "aios",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "description": "AIOS — AI Operating System: multi-LLM agentic coding platform (router, memory, tools, MCP, RAG, realtime collab)",
   "packageManager": "pnpm@9.12.0",
   "engines": {
