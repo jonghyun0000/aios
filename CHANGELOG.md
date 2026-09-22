@@ -1,6 +1,6 @@
 # CHANGELOG — 인계 이력 보존
 
-2026-09-22: 사용자의 명시적 선택에 따라 `76c10a2`에서 AIOS 자체 소스·문서를 MIT로 공개했다. SPDX MIT 표준 본문과 공개 Git 정체성 `JongHyun (jonghyun0000)`을 루트 LICENSE에 기록하고, 루트·workspace manifest 15개와 README·CONTRIBUTING을 일치시켰다. LICENSE 본문·manifest 결함 주입을 각각 검출했고 정책3/3·CI 정책 경계61/61·정적4·단위475/475가 PASS했다(`docs/36`). 과거의 미지정 기록은 당시 사실로 보존한다. 제3자 라이선스 전체 감사와 해당 SHA의 원격 CI는 미실행이며 push하지 않았다.
+2026-09-22: 사용자의 명시적 선택에 따라 `76c10a2`에서 AIOS 자체 소스·문서를 MIT로 공개했다. SPDX MIT 표준 본문과 공개 Git 정체성 `JongHyun (jonghyun0000)`을 루트 LICENSE에 기록하고, 루트·workspace manifest 15개와 README·CONTRIBUTING을 일치시켰다. LICENSE 본문·manifest 결함 주입을 각각 검출했고 정책3/3·CI 정책 경계61/61·정적4·단위475/475가 PASS했다(`docs/36`). 과거의 미지정 기록은 당시 사실로 보존한다. 사용자 승인으로 `5de9544`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35723839403)가 성공했다. 제3자 라이선스 전체 감사는 미실행이다.
 
 2026-09-22: NEXT_STEPS 1-5와 단계1을 완료했다. `c8b635e`에서 일반 `dev-up.sh`가 pnpm 실행 파일을 찾지 못하면 `.env.local`·Docker·Ollama·키·API보다 먼저 직접 원인과 AGENTS의 정확한 PATH 복구 명령을 출력한다. `--export-only`와 pnpm 존재 경로는 보존했다. 사전 검사 제거 결함 주입, 실제 bash 표적3/3·local-ops1/1·정적4·단위475/475 결과를 `docs/35-dev-up-pnpm-preflight.md`에 보존했다. 실제 정상 전체 기동과 원격 Linux CI는 실행하지 않았고 push하지 않았다.
 

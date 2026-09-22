@@ -17,7 +17,7 @@
 - **1-5·단계1 완료(2026-09-22):** pnpm이 PATH에 없으면 사용자 상태나 서비스를 건드리기 전에 직접 원인·AGENTS PATH·확인 명령을 내고 종료한다. 결함 주입 1건 검출, 표적3/3·local-ops1/1·정적4·단위475 PASS. 실제 정상 전체 기동은 미실행. 근거 `docs/35`, 구현 `c8b635e`.
 - **남은 P0:** 없음. 다음은 두 번째 Mac 없이 새 환경 재현성을 만드는 단계2다.
 - **공개 상태:** GitHub `jonghyun0000/aios`; 자체 소스·문서는 MIT(`76c10a2`, `docs/36`). 체험판 `https://aios-demo-mu.vercel.app`은 가상 응답/파일만 쓰며 push가 재배포하지 않는다.
-- **공개 반영(2026-09-20):** 사용자 승인으로 `15218c0`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35476338497)가 성공했다. Vercel 재배포는 미실행이다.
+- **공개 반영(2026-09-22):** 사용자 승인으로 `5de9544`까지 push했고 [원격 CI audit·verify](https://github.com/jonghyun0000/aios/actions/runs/35723839403)가 성공했다. Vercel 재배포는 미실행이다.
 - **현재 기동 정상(2026-09-20):** 사용자 승인 후 Colima 정상 재시작으로 T7 공유 오류 복구. 사용자 시작기로 API·워커 ready, 통계 화면4검사·채팅 응답/저장3회 확인. 신규 자료 적재는 별도이며 [docs/31](docs/31-bigdata-connection.md)에 기록했다.
 - **점수:** 기존 90/100은 당시 AI 자체 평가(`docs/22`). 별도 약70±6 의견과 근거 한계는 NEXT_STEPS §1에 있다. 이번 작업으로 점수를 올리지 않는다.
 - **전제 변경:** M1 Air 판매로 두 번째 Mac이 없다. 다른 Mac 설치 근거는 미충족으로 두고 같은 Mac/CI 결과로 대체 가산하지 않는다.
