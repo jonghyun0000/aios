@@ -8,7 +8,7 @@
 ## 0. 30초 요약
 
 - **현재 제품:** AIOS 로컬 AI 작업공간. 사용자 시작기는 `AIOS 시작.command` → `http://127.0.0.1:8791`이며, 개발용 8790과 구분한다(§3).
-- **다음 작업:** [NEXT_STEPS.md](NEXT_STEPS.md)의 **2-1 Linux CI 통합 잡**. 긴 과거 이력은 [CHANGELOG.md](CHANGELOG.md)에 원문 보존했다. 과거 성공을 새 변경의 검증으로 세지 않는다.
+- **다음 작업:** [NEXT_STEPS.md](NEXT_STEPS.md)의 **2-1 Linux CI 통합 잡** 진행 중. 구현·로컬 검증은 `docs/37`, 원격 실행은 새 변경의 push 승인 후 확인한다. 긴 과거 이력은 [CHANGELOG.md](CHANGELOG.md)에 보존했다.
 - **Claude 변경(2026-09-19):** Fastify 5·관련 플러그인과 감사 게이트(`b9f12d9`), 인계 가이드(`174e2dc`). 의존성 감사 15→0, 정적4·단위464·실서버7·보안·브라우저123/3skip은 그 커밋의 기록이다(`docs/08` §15.5).
 - **이번 후속 작업 완료:** 운영 이미지 Node/pnpm 정렬·컨텍스트 보호. 실제 격리 기동/인증/종료, 정적4·단위464·추가회귀10 통과. 인계 원문101줄 보존 확인. 범위·경고·실패 기록은 [docs/30-container-build.md](docs/30-container-build.md).
 - **1-2 완료(2026-09-22):** 하네스 임시 작업공간을 실경로로 통일하고 정확한 경로만 정리한다. 결함 주입 검출, phase4 48/48, phase7 36/36×3, phase6 16/16, s2 시나리오 23/23, 정적4·단위465 PASS. 근거 `docs/32`.
@@ -124,6 +124,7 @@ eval "$(./scripts/dev-up.sh --export-only)"; set -a; . ./.env.local; set +a
 - 서버 의존 단계 직전에 서버 생존을 확인하고, 죽어 있으면 `BLOCKED` 로 표시하며 크래시 리포트 위치를 알려 준다.
 - `Full scenario` 는 **로컬 7B 의 비결정성 때문에 가끔 실패한다**(§7). 실패 메시지에 턴 수·게이트 개입 횟수·모델이 쓴 코드가 남는다.
 - **CI 범위를 구분한다.** 공개 저장소의 `.github/workflows/ci.yml`은 Node 22 정적 검사·빌드·머신 독립 단위 검사, 정적 데모와 실제 앱의 합성 API/WS 접근성·키보드 회귀를 수행한다.
+  추가한 `integration` 잡은 실제 서비스·마이그레이션·대화 3회·파일 승인·복구 경로를 검사한다. 새 원격 실행은 아직 미검증이며 로컬 근거·한계는 `docs/37`을 따른다.
   T7/macOS 전용 시험·실제 모델·사용자 데이터 복원은 로컬에서 별도로 검증해야 한다. 과거 Git 추적 전에는 CI 실행 기록이 없었으며, 그때의 로컬 통과 기록이 원격 CI 통과를 뜻하지 않는다.
 
 ---
@@ -201,6 +202,8 @@ REPEATS=5 pnpm eval --against <이름>         # 기준선과 비교
 | 34 | phase5 전체 시나리오의 기존 실패(1-2와 분리) | 2026-09-22 우회 없는 tmpdir 점검에서 파일 도구 경로는 정상이나 29/31. 로컬 모델이 첫 함수의 named export를 빠뜨렸고, `step8.context_assembled`는 현재 `# Reference excerpts` 대신 옛 `Relevant code` 문자열을 찾는다. tmpdir 수정 범위에서 고치거나 성공으로 바꾸지 않았다. `docs/32` §6 |
 | 35 | e2e 서버 인증 전제 오분류 — **수정·검증 완료(2026-09-22)** | `verify-all e2e`가 건강한 키 인증 서버를 실행해 제품 회귀처럼 보이던 실패를 만들었다. 공개·DB 비변경 capability가 `local-no-auth`일 때만 자식을 실행하며 키 인증·오응답·503·연결 끊김·잘못된 URL은 BLOCKED/INCOMPLETE다. 결함 주입, API11/11·오케스트레이터15/15·정적4·단위475 PASS. 실제 Chromium 123개는 이번 변경 뒤 미실행. 상세 `docs/34-e2e-server-precondition.md` |
 | 36 | dev-up의 pnpm 명령 탐색 실패 은폐 — **수정·검증 완료(2026-09-22)** | 백그라운드 `nohup pnpm` 실패가 `/tmp/aios-api.log`에만 남아 90초 뒤 일반 API 장애로 보였다. 일반 기동은 설정·서비스·키 전에 pnpm PATH를 확인하고 정확한 AGENTS PATH를 안내하며, export-only는 기존처럼 예외다. 결함 주입 2/3 PASS·1/3 FAIL, 고정3/3·local-ops1/1·정적4·단위475 PASS. 정상 전체 기동·원격 Linux CI는 미실행. 상세 `docs/35-dev-up-pnpm-preflight.md` |
+| 37 | 로컬 모델 ID 명시 선택 실패 | 2-1 검증 중 기존 `AiRouter.rank({model:"qwen3:8b"})`가 동적 로컬 카탈로그 대신 정적 `findModel`을 조회해 `unknown_model`을 내는 것을 실행으로 확인했다. 이번 통합 잡은 로컬 모델 하나를 등록하고 자동 선택을 사용한다. 제품 수정은 별도 항목이며 `docs/37`에 실패를 보존했다. |
+| 38 | 조립한 API의 자연 종료 | 2-1 검사에서 HTTP·DB 정리를 마친 뒤에도 Redis 연결이 남았다. 레거시 WS 구독에 onClose 해제가 없고 작업 큐 연결도 프로세스에 남을 수 있다. 제품 main과 같은 명시적 종료를 쓰며 자연 종료·자원 누수 개선으로 주장하지 않는다. `docs/37` |
 
 ---
 

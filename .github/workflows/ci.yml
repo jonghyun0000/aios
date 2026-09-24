@@ -18,6 +18,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aios
+          POSTGRES_PASSWORD: ci-only-disposable
+          POSTGRES_DB: integration_admin
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aios -d integration_admin"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      ollama:
+        # 0.11.10의 linux/amd64 manifest. 태그 이동으로 실행기가 달라지지 않게 고정한다.
+        image: ollama/ollama@sha256:828f1ca255c720ac19b564e47b79a52419dba40557d258667c3d311c1c3e261b
+        ports: ["11434:11434"]
+        env:
+          OLLAMA_NUM_PARALLEL: "1"
+          OLLAMA_MAX_LOADED_MODELS: "1"
+        options: >-
+          --health-cmd "ollama list"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 캐시 없는 최초 다운로드도 20분 상한에 포함한다. 모델 캐시로 DB·사용자 파일을 섞지 않는다.
+      - name: Download small chat model and 1024-dimensional embedder
+        timeout-minutes: 8
+        env:
+          OLLAMA_CONTAINER: ${{ job.services.ollama.id }}
+        run: |
+          docker exec "$OLLAMA_CONTAINER" ollama pull qwen2.5:0.5b
+          docker exec "$OLLAMA_CONTAINER" ollama pull bge-m3
+          docker exec "$OLLAMA_CONTAINER" ollama list
+      - name: Real services, missing-migration injection, chat and file approval
+        timeout-minutes: 10
+        env:
+          AIOS_CI_INTEGRATION: "1"
+          CI_DATABASE_URL: postgresql://aios:ci-only-disposable@127.0.0.1:5432/integration_admin
+          CI_REDIS_URL: redis://127.0.0.1:6379/0
+          CI_OLLAMA_URL: http://127.0.0.1:11434
+          CI_ARTIFACT_ROOT: ${{ runner.temp }}
+        run: node scripts/verify-ci-integration.mjs
+
   # 프로덕션 의존성의 알려진 취약점 게이트.
   # 별도 job 인 이유: 코드는 그대로인데 새 권고 때문에 빨개지는 일이 생길 수 있다.
   # 그때 "테스트가 깨졌다"와 "의존성 권고가 나왔다"가 한눈에 구분돼야 한다.
@@ -82,5 +143,6 @@ jobs:
       # scripts/local-*.test.mjs도 Mac/T7/로컬 프로세스 전용이다.
       # 브라우저 검사는 독립 정적 데모와 실제 앱의 합성 API/WS 화면·키보드 경로를 검사한다.
       # 실제 앱↔DB↔모델 통합, DB 마이그레이션·Docker sandbox·Ollama eval·통합 백업/복원은
-      # 이 CI의 PASS 범위가 아니다. 전용 로컬 검증 결과는 docs/20-stage4-local-operations.md를 참조한다.
+      # 이 verify job의 PASS 범위가 아니다. 실제 서비스 연결은 integration job에서 별도로 확인한다.
+      # 로컬 운영 검증 결과는 docs/20-stage4-local-operations.md를 참조한다.
       # 이전 자동 배포 예제는 docs/examples/legacy-ci-deploy.yml로 옮겼으며 비활성 상태다.

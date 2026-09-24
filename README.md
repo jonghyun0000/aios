@@ -129,7 +129,7 @@ pnpm verify local-ops                    # T7/macOS 운영 결함 주입 검사
 cd apps/verify && REPEATS=5 pnpm eval    # 품질 회귀 측정 (신뢰구간 포함)
 ```
 
-GitHub CI는 이 로컬 환경 전체를 재현하지 않습니다. 자동 배포·모델 호출·이미지 공개 없이, 소스 정적 검사·빌드·머신 독립 단위 검사와 별도 공개 체험판의 데스크톱/모바일 브라우저 검사를 수행합니다. 체험판 통과는 실제 DB·LLM·파일 실행 통과가 아닙니다.
+GitHub CI의 `verify` 잡은 소스 정적 검사·빌드·머신 독립 단위 검사와 브라우저 회귀를 수행합니다. 별도 `integration` 잡은 새 PostgreSQL DB·Redis·Ollama로 대화 저장과 파일 승인·해시·복구를 검사합니다. 이 잡의 로컬 검증과 원격 실행 상태는 [docs/37](docs/37-linux-ci-integration.md)에 기록합니다. macOS·T7 환경과 모델 품질 검증은 별도로 필요합니다.
 `pnpm verify`의 기본값은 타입·린트·이식 가능한 단위·빌드 4단계입니다. 단위 검사는 실제 결과를 집계하며 T7·실제 DB 전용 5개 파일의 제외와 시험이 없는 5개 패키지를 따로 표시합니다. 이 범위의 PASS가 실제 DB·모델·복원 시험을 뜻하지 않습니다. 오타나 0개 검사, 선택한 시험의 SKIP/차단을 전체 PASS로 표시하지 않습니다. `pnpm verify --list`로 범위를 확인하고 `--report`로 T7에 코드 지문과 결과를 저장할 수 있습니다. 자세한 범위는 [릴리스 검증](docs/28-release-verification.md)을 참고하세요.
 구형 전체/phase8에는 이미지·컨테이너·테스트 DB 정리가 있으므로 별도 명시 플래그와 격리 환경 확인 없이는 시작하지 않습니다. [검증 안전 경계](docs/28-release-verification.md)를 참고하세요.
 
