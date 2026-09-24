@@ -60,4 +60,19 @@ node scripts/verify-ci-integration.mjs
 
 이번 실행에서 CREATE에 성공한 DB와 생성한 임시 폴더만 제거한다. Redis 대화·이벤트·지연 작업은 생성한 세션 ID로만 정리한다. 최초 실패 실행이 남긴 이벤트 4개도 해당 로그의 세션 ID 5개로 확인해 정리했다. 기존 DB 행·사용자 작업 폴더·컨테이너는 변경하지 않았다.
 
-소형 모델 qwen2.5:0.5b 약 398MB를 T7 모델 저장소에 추가했다. 다음 검증에서 재사용한다. 원격 CI는 아직 실행하지 않았으며 로드맵 2-1은 **진행**이다. push 승인을 받은 뒤 새 러너에서의 실제 결과로 마감한다.
+소형 모델 qwen2.5:0.5b 약 398MB를 T7 모델 저장소에 추가했다. 다음 검증에서 재사용한다. 아래 원격 실패로 로드맵 2-1은 **진행**이다.
+
+## 첫 원격 실행과 후속 완료 기준 — 2026-09-25
+
+사용자 승인 후 `ddf1c73`을 push했다. [실행 36022205434](https://github.com/jonghyun0000/aios/actions/runs/36022205434)에서 audit·verify는 성공했지만 integration은 88초 만에 실패했다. 모델 다운로드·마이그레이션 누락 검출은 성공했으며 정상 대화 첫 요청이 Ollama HTTP 400으로 거부됐다. 원본 로그는 T7의 `verification-reports/ci-integration-remote-36022205434.log`에 보존했다. 대화 3회·승인·복구는 원격 PASS가 아니다.
+
+원인 귀속: 로컬 성공 환경은 Ollama 0.32.15인데 새 CI가 0.11.10을 선택했다. 기존 어댑터는 빠른 대화에 `reasoning_effort:"none"`을 전송한다. [0.11.10 변환 코드](https://github.com/ollama/ollama/blob/v0.11.10/openai/openai.go)는 이를 문자열 Think로 전달하고 [서버 코드](https://github.com/ollama/ollama/blob/v0.11.10/server/routes.go)는 문자열 Think를 일반 모델에서 거부한다. 로그 본문은 가려져 있어 구체적인 오류 메시지는 관측하지 못했지만, 소스상 요청 호환성 불일치가 확인됐다. 제품 코드의 신규 회귀가 아니라 CI 버전 선택의 문제로 분류한다.
+
+수정 전 기준: CI만 로컬 검증 버전 0.32.15의 linux/amd64 digest로 고정하고 기존 단언·결함 주입을 그대로 유지한다. 정적 4단계와 로컬 소형 모델 통합 검사를 다시 실행한다. 원격의 동일 경로 성공·20분 조건은 새 push 승인 후 확인하며 그 전에는 완료로 바꾸지 않는다. 최초 실패가 버전 정렬 전의 음성 근거이며, 마이그레이션 결함 주입도 계속 실행한다.
+
+수정 및 재검증: `docker manifest inspect ollama/ollama:0.32.15`로 linux/amd64 digest `sha256:ab903927dcb081c6d3780b54a7b6de4fda6a65cb9799e4f047a34ba9511b9c78`을 확인하고 CI에 고정했다. [0.32.15 변환 코드](https://github.com/ollama/ollama/blob/v0.32.15/openai/openai.go)는 `none`을 불리언 false로 변환한다. 앞의 구현 설명 중 0.11.10은 최초 실행 당시 버전이며 현재 고정은 0.32.15다. 제품 코드·단언은 바꾸지 않았다.
+
+- `ci-ollama-alignment-local.log`: 누락 마이그레이션 검출, 대화 **3/3**, 임베딩·승인·해시·복구·원본 마이그레이션 지문 일치, 종료 **0**. 로컬 Ollama를 사용했으며 새 Linux 이미지를 실행한 결과는 아니다.
+- `ci-ollama-alignment-static.log`: 정적 **4/4**, 단위 **475/475**, 실패·skip **0**. 구조화 보고서 `verify-1790264956986-ba4f39df-304f-4b7a-8a31-54447fd7b834.json`. YAML과 고정 digest 검사도 통과했다.
+- 이번 검사 임시 폴더와 고아 esbuild 없음. 생성한 시험 DB·Redis 기록은 기존 하네스의 ID 제한 정리로 제거했다. 사용자 데이터·서비스는 유지했다.
+- 원격 재실행은 새 수정 커밋의 push 승인 대기다. 최초 실패를 성공으로 덮지 않으며 단계 2-1은 진행이다.
