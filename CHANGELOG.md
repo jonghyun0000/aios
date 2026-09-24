@@ -1,5 +1,7 @@
 # CHANGELOG — 인계 이력 보존
 
+2026-09-25 원격 완료: 사용자 승인으로 `028e2e2`를 push했고 [실행 36023837723](https://github.com/jonghyun0000/aios/actions/runs/36023837723)의 audit·verify·integration 전부 성공했다. integration은 최초 다운로드 포함117초, 대화3/3·1024차원 임베딩·DB/Redis 저장·승인/해시/중복 거부/복구·마이그레이션 누락 검출 PASS. NEXT_STEPS 2-1 완료로 갱신했다. 최초 실패와 미검증 범위는 `docs/37`에 유지하며 점수는 바꾸지 않는다. 다음은 사용자 섭외가 필요한 3-3 신규 사용자 관찰이다.
+
 2026-09-25 후속: 사용자 승인으로 `ddf1c73`을 push했다. 원격 실행 `36022205434`의 audit·verify는 성공, integration은 첫 대화 Ollama HTTP 400으로 실패했다. CI의 0.11.10과 로컬의 0.32.15 사이 reasoning_effort 처리 불일치를 확인해 CI만 0.32.15 linux/amd64 digest로 정렬했다. 로컬 재검증 정적4/4·단위475/475·대화3/3·마이그레이션 결함 검출·승인/해시/복구 PASS. 새 원격 성공은 미검증이며 재push 승인이 필요하다. 실패 로그·근거는 `docs/37`에 보존했다.
 
 2026-09-25: NEXT_STEPS 2-1의 Linux 서비스 통합 잡을 구현하고 로컬 검증했다. 새 DB 마이그레이션·실제 HTTP/SSE·PostgreSQL/Redis 저장·1024차원 임베딩·파일 승인·해시·복구를 검사한다. 마이그레이션 0005 누락을 별도 DB에서 실제 42P01 실패로 검출했다. qwen2.5:0.5b와 qwen3:8b 각각 새 대화3/3·전체 흐름·프로세스 종료0, 정적4·단위475/475 PASS. 기존 명시적 로컬 모델 선택 실패와 API 자연 종료 시 Redis 연결 잔존을 발견해 HANDOFF 위험37·38로 기록했다. 최초 실패와 제한은 `docs/37-linux-ci-integration.md`에 보존했다. 원격 Linux CI와 다운로드 포함20분은 push 승인 후 확인해야 하므로 로드맵은 진행이다.
