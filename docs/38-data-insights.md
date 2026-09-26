@@ -33,3 +33,5 @@ AI가 통계를 해석하는 품질, 데이터끼리 자동 비교, 그래프 �
 - 시작기 상태: API·워커·Postgres·Redis·Ollama ready. 사용자 데이터·프로젝트 파일·통계 원본은 변경하지 않았다.
 
 `data-insights-static-final.log`에서 정적 **4/4 PASS**, 이식 가능 단위 **478/478 PASS**(fail·skip·todo 0), 빌드 PASS를 확인했다. 보고서는 `verify-1790436832046-47effcac-2d2d-4c91-9f3c-bfb6cd12056a.json`에 생성됐으며, 로그가 최종 근거다. PDF/이미지/Word, 자동 동기화, 전체 원시 데이터 전달과 모델 응답 품질 평가는 여전히 미검증이다.
+
+사용자 승인 후 `343a00c`을 push했고, [GitHub 실행 36252632206](https://github.com/jonghyun0000/aios/actions/runs/36252632206)에서 audit·verify·integration **3/3 성공**을 확인했다. integration은 새 PostgreSQL·Redis·Ollama에서 기존 마이그레이션 결함 주입·대화·승인·해시·복구를 다시 통과한다. 이 원격 CI는 새 통계 초안 버튼의 개별 브라우저 동작을 검사하지 않으며, 그 근거는 위 로컬 Playwright 1/1이다.
