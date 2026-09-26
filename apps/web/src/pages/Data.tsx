@@ -2,7 +2,8 @@ import { useState } from "react";
 import { get, apiKeyStore } from "../lib/api.js";
 import { useAsync, AsyncBoundary } from "../components/Async.js";
 import { LineChart, type Point } from "../components/LineChart.js";
-import { Link } from "../lib/router.js";
+import { Link, useRouter } from "../lib/router.js";
+import { createDataAnalysisDraft, saveDataAnalysisDraft } from "../lib/data-analysis-draft.js";
 
 interface CategoryRow { category: string; series_count: number; row_count: number }
 interface SeriesRow {
@@ -144,6 +145,7 @@ export function DataPage() {
 }
 
 export function DataDetailPage({ seriesId }: { seriesId: string }) {
+  const { navigate } = useRouter();
   const [periodPrefix, setPeriodPrefix] = useState("");
   const [region, setRegion] = useState("");
   const [item, setItem] = useState("");
@@ -202,6 +204,18 @@ export function DataDetailPage({ seriesId }: { seriesId: string }) {
   };
 
   const s = detail.data?.series;
+  const beginAnalysis = () => {
+    if (!s || !detail.data) return;
+    const draft = createDataAnalysisDraft({
+      seriesId: s.series_id, seriesName: s.series_name, source: s.source, unit: s.unit, periodType: s.period_type,
+      filters: { periodPrefix, region, item }, points: detail.data.points,
+    });
+    if (!draft || !saveDataAnalysisDraft(draft)) {
+      setDownloadError("분석 초안을 준비하지 못했습니다. 수치가 있는지 확인한 뒤 다시 시도해 주세요.");
+      return;
+    }
+    navigate("/chat");
+  };
 
   return (
     <div className="main-narrow" style={{ maxWidth: 1000 }}>
@@ -266,9 +280,15 @@ export function DataDetailPage({ seriesId }: { seriesId: string }) {
               <button onClick={() => void downloadCsv()} disabled={downloading}>
                 {downloading ? "내려받는 중…" : "CSV 내려받기"}
               </button>
+              <button onClick={beginAnalysis} disabled={detail.loading || detail.data.points.every((point) => point.avg_value === null)}>
+                AI 분석 초안 만들기
+              </button>
             </div>
 
             {downloadError && <div className="alert" role="alert">CSV 내려받기 실패: {downloadError}</div>}
+            <p className="small muted" style={{ marginTop: -4, marginBottom: 12 }}>
+              선택한 필터와 최근 수치 요약을 새 채팅의 편집 가능한 초안으로 옮깁니다. 자동 전송하거나 원본 통계를 바꾸지 않습니다.
+            </p>
 
             <div className="card">
               <LineChart points={detail.data.points} unit={s.unit} />

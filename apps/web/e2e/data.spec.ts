@@ -50,4 +50,17 @@ test.describe("공공통계 브라우저", () => {
     // 필터가 무시되면 화면은 적용했다고 하면서 같은 값을 보여준다 — 조용한 거짓말이다.
     await expect(page.locator("svg path").first()).not.toHaveAttribute("d", before ?? "");
   });
+
+  test("선택한 통계를 검토 가능한 AI 분석 초안으로 넘긴다", async ({ page }) => {
+    await goRoute(page, "/data/1978");
+    await page.getByLabel("지역 필터").selectOption({ index: 1 });
+    const selectedRegion = await page.getByLabel("지역 필터").inputValue();
+    await page.getByRole("button", { name: "AI 분석 초안 만들기" }).click();
+    await expect(page).toHaveURL(/#\/chat$/);
+    const input = page.getByLabel("메시지 입력");
+    await expect(input).toHaveValue(/전세가격지수/);
+    await expect(input).toHaveValue(new RegExp(selectedRegion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    // 클릭만으로 모델 요청을 보내면 사용자가 수치·질문을 검토할 기회를 잃는다.
+    await expect(page.getByRole("button", { name: "전송" })).toBeEnabled();
+  });
 });

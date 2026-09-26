@@ -10,6 +10,7 @@ import { shouldSendOnEnter } from "../lib/chat-input.js";
 import { presentWorkspaceContext, type WorkspacePresentation } from "../lib/workspace-context.js";
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { ExecutionPanel } from "../components/ExecutionPanel.js";
+import { takeDataAnalysisDraft } from "../lib/data-analysis-draft.js";
 import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/types.js";
 
 interface ToolTrace { id: string; name: string; ok?: boolean; summary?: string }
@@ -98,6 +99,16 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   }, [live, history.data]);
 
   useEffect(() => () => { abortRef.current?.abort(); setBusy(false); }, [setBusy]);
+  // 공공통계 화면의 선택값은 URL에 넣지 않는다. URL은 브라우저 이력·공유 화면에 남기 쉽고,
+  // 초안도 모델로 자동 전송하지 않아 사용자가 수치·질문을 먼저 검토할 수 있게 한다.
+  useEffect(() => {
+    if (sessionId) return;
+    const draft = takeDataAnalysisDraft();
+    if (!draft) return;
+    setInput(draft.prompt);
+    setContextNotice(`‘${draft.label}’ 통계 분석 초안을 넣었습니다. 확인·수정한 뒤 전송하세요.`);
+    queueMicrotask(() => textareaRef.current?.focus());
+  }, [sessionId]);
   useEffect(() => {
     followScrollRef.current = true;
     if (!sendingRef.current) { setStrategy(null); setTimings({}); setContextNotice(""); setWorkspaceContext(null); }
