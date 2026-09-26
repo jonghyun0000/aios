@@ -22,7 +22,7 @@
 | GET | /v1/me | 현재 사용자/조직 | viewer |
 | POST | /v1/sessions | 세션 생성 `{projectId?, title?}` | member |
 | GET | /v1/sessions | 세션 목록 (cursor 페이지네이션) | viewer |
-| POST | /v1/sessions/:id/messages | **메시지 전송, SSE 스트림 응답** | member |
+| POST | /v1/sessions/:id/messages | **메시지 전송, SSE 스트림 응답**. `routing.model` 은 `/v1/models` 의 모델만 — 아니면 스트림 전 400 `unknown_model`, 메시지 저장 없음 | member |
 | GET | /v1/sessions/:id/messages | 히스토리. 참고자료를 쓴 답변은 `content.evidence`(전달 구간·원문·조회 파일) 포함 | viewer |
 | GET | /v1/sessions/:id/messages/:messageId/evidence/:sourceId | 답변 근거 구간을 현재 파일과 대조(`status`·`match`·`newerSameName`·앞뒤 3행 문맥). 조회 전용 — `docs/39` | viewer |
 | POST | /v1/projects | 프로젝트 생성 | admin |

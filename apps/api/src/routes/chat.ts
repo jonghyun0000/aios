@@ -16,7 +16,7 @@ const BodySchema = z.object({
   routing: z
     .object({
       taskClass: z.enum(["chat", "code", "reasoning", "summarize", "cheap", "vision"]).optional(),
-      model: z.string().optional(),
+      model: z.string().min(1).max(200).optional(),
       maxCostUsd: z.number().positive().optional(),
       reasoning: z.enum(["auto", "off"]).optional(),
     })
@@ -67,6 +67,9 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
     );
     const session = rows[0];
     if (!session) throw new NotFoundError("session");
+    // 명시 모델은 스트림을 열고 사용자 메시지를 저장하기 **전에** 확인한다. 뒤에서 거부하면
+    // HTTP 200으로 시작한 뒤 오류가 나고, 답 없는 질문이 대화 기록에 남는다(docs/41).
+    if (body.routing.model) ctx.router.resolveModel(body.routing.model);
 
     // 쿼터는 스트림 시작 전에 확인 — 시작한 스트림을 끊는 것보다 싸고 정직하다
     if (req.auth.via !== "local") await ctx.usage.checkQuota(req.auth.orgId);

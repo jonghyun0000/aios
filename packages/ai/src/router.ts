@@ -8,7 +8,7 @@ import type {
   Usage,
 } from "@aios/shared";
 import type { ProviderAdapter } from "./adapter.js";
-import { MODEL_CATALOG, costUsd, findModel } from "./catalog.js";
+import { MODEL_CATALOG, costUsd } from "./catalog.js";
 
 export interface RouteConstraints {
   taskClass?: TaskClass;
@@ -48,14 +48,23 @@ export class AiRouter {
     }
   }
 
-  rank(c: RouteConstraints): ModelInfo[] {
-    if (c.model) {
-      const m = findModel(c.model);
-      if (!m || !this.adapters[m.provider]) {
-        throw new AiosError("unknown_model", `model '${c.model}' unavailable`, { status: 400 });
-      }
-      return [m]; // 사용자가 고정한 모델은 폴백하지 않는다 — 명시 선택을 조용히 바꾸는 것은 배신
+  /**
+   * 명시 선택한 모델을 **이 라우터의 카탈로그**에서 찾는다(어댑터가 있는 모델만 남아 있다).
+   * 예전에는 코드 상수 카탈로그(findModel)를 봐서, 설정으로 추가한 로컬 모델을 /v1/models 는
+   * 광고하면서도 지정하면 거부했다(docs/41). 없으면 사용 가능한 모델 이름과 함께 400.
+   */
+  resolveModel(id: string): ModelInfo {
+    const m = this.catalog.find((model) => model.id === id);
+    if (!m) {
+      const available = this.catalog.map((model) => model.id);
+      throw new AiosError("unknown_model", `model '${id.slice(0, 120)}' unavailable. available: ${available.slice(0, 20).join(", ")}`, { status: 400, retryable: false });
     }
+    return m;
+  }
+
+  rank(c: RouteConstraints): ModelInfo[] {
+    // 사용자가 고정한 모델은 폴백하지 않는다 — 명시 선택을 조용히 바꾸는 것은 배신
+    if (c.model) return [this.resolveModel(c.model)];
 
     const cheapTask = c.taskClass === "cheap" || c.taskClass === "summarize";
     const est = c.estimatedInputTokens ?? 4000;
