@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  api, messageText, messageToolCalls, type MessageRow,
+  api, messageText, messageToolCalls, type MessageRow, type ModelSnapshot,
 } from "../lib/api.js";
 import { streamChat, type ChatEvent } from "../lib/stream.js";
 import { AsyncBoundary } from "../components/Async.js";
@@ -72,6 +72,9 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   // 이어서 할 실행. 전송 한 번에만 쓰고 비운다(같은 실행을 두 번 이어서 하지 않게).
   const [resumeTarget, setResumeTarget] = useState<{ id: string; goal: string } | null>(null);
   const [mode, setMode] = useState<ChatMode>("auto");
+  const [model, setModel] = useState("");
+  const [modelList, setModelList] = useState<{ loading: boolean; models: ModelSnapshot[]; error: string | null }>({ loading: true, models: [], error: null });
+  const modelRequestVersion = useRef(0);
   const [strategy, setStrategy] = useState<{ path: keyof typeof PATH_LABEL; reason: string } | null>(null);
   const [timings, setTimings] = useState<Partial<Record<TimingPhase, number>>>({});
   const [contextNotice, setContextNotice] = useState("");
@@ -97,6 +100,23 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
    * 스크린리더 사용자는 '끝났다'는 사실을 듣지 못한다.
    */
   const [lastAnnouncement, setLastAnnouncement] = useState("");
+
+  const loadModels = useCallback(async () => {
+    const request = ++modelRequestVersion.current;
+    setModelList({ loading: true, models: [], error: null });
+    setModel(""); // 목록을 다시 검증하기 전의 선택은 전송하지 않는다.
+    try {
+      const data = await api<{ models: ModelSnapshot[] }>("/v1/models", { signal: AbortSignal.timeout(12_000) });
+      if (modelRequestVersion.current === request) setModelList({ loading: false, models: data.models, error: null });
+    } catch (err) {
+      if (modelRequestVersion.current === request) setModelList({ loading: false, models: [], error: err instanceof Error ? err.message : String(err) });
+    }
+  }, []);
+  useEffect(() => {
+    const version = modelRequestVersion;
+    void loadModels();
+    return () => { version.current++; };
+  }, [loadModels]);
 
   // 새 내용이 오면 아래로 따라간다. 사용자가 위로 스크롤해 과거를 읽는 중이면 방해하지 않는다.
   useEffect(() => {
@@ -199,7 +219,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       setPendingMessage(content);
       const resumeRunId = toolsEnabled && resumeTarget && target === sessionId ? resumeTarget.id : undefined;
       setResumeTarget(null);
-      await streamChat({ sessionId: target, content, toolsEnabled, verificationCommand, resumeRunId, mode, useMemory, signal: controller.signal, onEvent: apply });
+      await streamChat({ sessionId: target, content, toolsEnabled, verificationCommand, resumeRunId, mode, model, useMemory, signal: controller.signal, onEvent: apply });
     } catch (err) {
       if (controller.signal.aborted) return; // 사용자가 중단한 것은 에러가 아니다
       const detail = err instanceof Error ? err.message : String(err);
@@ -228,7 +248,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       setBusy(false);
       setExecutionRevision((old) => old + 1);
     }
-  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, resumeTarget, mode, useMemory]);
+  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, resumeTarget, mode, model, useMemory]);
 
   /*
    * 스크린리더에 알릴 상태 문구.
@@ -376,11 +396,21 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
                 <option value="fast">빠른 응답</option><option value="thorough">깊이 생각</option>
               </select>
             </label>
+            <label className="mode-control">모델
+              <select aria-label="모델 선택" value={model} disabled={sending || modelList.loading || !!modelList.error} onChange={(e) => setModel(e.target.value)}>
+                <option value="">자동 선택</option>
+                {modelList.models.map((item) => <option key={`${item.provider}:${item.model}`} value={item.model} disabled={item.open}>
+                  {item.model} · {item.provider}{item.open ? " (일시적 장애)" : ""}
+                </option>)}
+              </select>
+            </label>
           <label className="small tools-option" title="공공통계 조회 · 작업 폴더 파일 편집 · 샌드박스 실행">
             <input type="checkbox" style={{ width: "auto", marginRight: 6 }} checked={toolsEnabled} disabled={sending} onChange={(e) => setToolsEnabled(e.target.checked)} />{" "}
             도구 사용 허용
           </label>
           </div>
+          {modelList.error && <div className="small mode-hint" role="status">모델 목록을 불러오지 못했습니다: {modelList.error}. 자동 선택으로 대화할 수 있습니다. <button type="button" disabled={sending} onClick={() => void loadModels()}>모델 목록 다시 불러오기</button></div>}
+          {!modelList.loading && !modelList.error && modelList.models.length === 0 && <div className="small mode-hint" role="status">설정된 모델이 없습니다. 서버의 모델 설정을 확인해 주세요.</div>}
           {toolsEnabled && <label className="small verification-command">검증 명령 (선택)
             <input aria-label="검증 명령" value={verificationCommand} maxLength={4000} disabled={sending} placeholder="예: node --test test.js" onChange={(e) => setVerificationCommand(e.target.value)} />
             <span className="muted">파일 수정·명령 실행은 건별 승인이 필요합니다. 검증 명령이 없으면 동작 미검증으로 표시합니다.</span>

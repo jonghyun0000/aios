@@ -1,11 +1,15 @@
 import { test, expect, type Page } from "@playwright/test";
 import { login, goRoute } from "./helpers.js";
 
-type Sent = { content: string; mode: string; context: { useMemory: boolean } };
+type Sent = { content: string; mode: string; routing?: { model: string }; context: { useMemory: boolean } };
 async function mockChat(page: Page) {
   const sent: Sent[] = [];
   const messages: { id: string; role: string; content: { text: string } }[] = [];
   const sessions = [{ id: "old", title: "이전 대화 테스트", updated_at: "2026-09-10T12:00:00Z" }];
+  await page.route("**/v1/models", (route) => route.fulfill({ json: { models: [
+    { model: "qwen3:8b", provider: "local", open: false, successRate: 1, ewmaLatencyMs: 1000 },
+    { model: "offline:7b", provider: "local", open: true, successRate: 0, ewmaLatencyMs: 0 },
+  ] } }));
   await page.route("**/v1/sessions**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -50,6 +54,52 @@ test("Enter로 한 번 전송하고 자동 모드와 현재 대화 기억을 유
   await input.press("Enter");
   await expect.poll(() => sent.length).toBe(3);
   expect(sent[2]).toMatchObject({ mode: "fast" });
+});
+
+test("설정된 모델을 직접 선택해 보내고 자동 라우팅으로 돌아온다", async ({ page }) => {
+  const { sent } = await mockChat(page);
+  const select = page.getByRole("combobox", { name: "모델 선택" });
+  await expect(select).toBeEnabled();
+  await expect(select).toHaveValue("");
+  // Playwright의 toBeDisabled는 <option disabled>를 활성으로 판정할 수 있어 HTML 속성을 확인한다.
+  await expect(select.locator('option[value="offline:7b"]')).toHaveAttribute("disabled", "");
+  await select.selectOption("qwen3:8b");
+  const input = page.getByRole("textbox", { name: "메시지 입력" });
+  await input.fill("모델 직접 선택");
+  await input.press("Enter");
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]?.routing).toEqual({ model: "qwen3:8b" });
+  await expect(select).toBeEnabled();
+  await select.selectOption("");
+  await input.fill("다시 자동 선택");
+  await input.press("Enter");
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.routing).toBeUndefined();
+});
+
+test("모델 목록 실패 중에도 자동 전송하고 재시도 후 직접 선택한다", async ({ page }) => {
+  const { sent } = await mockChat(page);
+  let failing = true;
+  await page.route("**/v1/models", (route) => failing
+    ? route.fulfill({ status: 503, json: { error: { message: "고의 모델 목록 오류" } } })
+    : route.fulfill({ json: { models: [{ model: "qwen3:8b", provider: "local", open: false, successRate: 1, ewmaLatencyMs: 1000 }] } }));
+  await page.reload();
+  await expect(page.getByRole("status").filter({ hasText: "고의 모델 목록 오류" })).toBeVisible();
+  const select = page.getByRole("combobox", { name: "모델 선택" });
+  await expect(select).toBeDisabled();
+  const input = page.getByRole("textbox", { name: "메시지 입력" });
+  await input.fill("목록 오류 중 자동 대화");
+  await input.press("Enter");
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]?.routing).toBeUndefined();
+  failing = false;
+  await page.getByRole("button", { name: "모델 목록 다시 불러오기" }).click();
+  await expect(select).toBeEnabled();
+  await select.selectOption("qwen3:8b");
+  await input.fill("재시도 후 명시 선택");
+  await input.press("Enter");
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[1]?.routing).toEqual({ model: "qwen3:8b" });
 });
 
 test("Shift+Enter 줄바꿈과 한글 조합 확정이 전송되지 않는다", async ({ page }) => {

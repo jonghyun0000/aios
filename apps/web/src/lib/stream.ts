@@ -40,6 +40,8 @@ export interface SendOptions {
   /** 이어서 할 실행 ID(docs/42). 서버가 소유권·상태·횟수를 다시 확인한다. */
   resumeRunId?: string;
   mode?: ChatMode;
+  /** /v1/models에 광고된 모델의 명시적 선택. 없으면 서버 라우터에 맡긴다. */
+  model?: string;
   useMemory?: boolean;
   signal?: AbortSignal;
   onEvent(event: ChatEvent): void;
@@ -58,6 +60,7 @@ export async function streamChat(opts: SendOptions): Promise<void> {
     body: JSON.stringify({
       content: opts.content,
       mode: opts.mode ?? "auto",
+      routing: opts.model ? { model: opts.model } : undefined,
       tools: { enabled: opts.toolsEnabled ?? false },
       verificationCommand: opts.toolsEnabled ? opts.verificationCommand?.trim() || undefined : undefined,
       resumeRunId: opts.toolsEnabled ? opts.resumeRunId : undefined,
