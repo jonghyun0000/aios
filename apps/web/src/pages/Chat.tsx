@@ -12,6 +12,7 @@ import { EvidenceDialog, EvidenceList } from "../components/EvidencePanel.js";
 import { presentWorkspaceContext, type WorkspacePresentation } from "../lib/workspace-context.js";
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { ExecutionPanel } from "../components/ExecutionPanel.js";
+import { RESUME_PROMPT } from "../lib/goal-flow.js";
 import { takeDataAnalysisDraft } from "../lib/data-analysis-draft.js";
 import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/types.js";
 
@@ -68,6 +69,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const [useMemory, setUseMemory] = useState(true);
   const [verificationCommand, setVerificationCommand] = useState("");
   const [executionRevision, setExecutionRevision] = useState(0);
+  // 이어서 할 실행. 전송 한 번에만 쓰고 비운다(같은 실행을 두 번 이어서 하지 않게).
+  const [resumeTarget, setResumeTarget] = useState<{ id: string; goal: string } | null>(null);
   const [mode, setMode] = useState<ChatMode>("auto");
   const [strategy, setStrategy] = useState<{ path: keyof typeof PATH_LABEL; reason: string } | null>(null);
   const [timings, setTimings] = useState<Partial<Record<TimingPhase, number>>>({});
@@ -116,6 +119,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     followScrollRef.current = true;
     setOpenEvidence(null);
+    setResumeTarget(null);
     if (!sendingRef.current) { setStrategy(null); setTimings({}); setContextNotice(""); setWorkspaceContext(null); }
     if (activeSessionRef.current && activeSessionRef.current !== sessionId) abortRef.current?.abort();
   }, [sessionId]);
@@ -193,7 +197,9 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       controller.signal.throwIfAborted();
       setInput("");
       setPendingMessage(content);
-      await streamChat({ sessionId: target, content, toolsEnabled, verificationCommand, mode, useMemory, signal: controller.signal, onEvent: apply });
+      const resumeRunId = toolsEnabled && resumeTarget && target === sessionId ? resumeTarget.id : undefined;
+      setResumeTarget(null);
+      await streamChat({ sessionId: target, content, toolsEnabled, verificationCommand, resumeRunId, mode, useMemory, signal: controller.signal, onEvent: apply });
     } catch (err) {
       if (controller.signal.aborted) return; // 사용자가 중단한 것은 에러가 아니다
       const detail = err instanceof Error ? err.message : String(err);
@@ -222,7 +228,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       setBusy(false);
       setExecutionRevision((old) => old + 1);
     }
-  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, mode, useMemory]);
+  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, resumeTarget, mode, useMemory]);
 
   /*
    * 스크린리더에 알릴 상태 문구.
@@ -351,7 +357,17 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
             </div>
           )}
 
-          {sessionId && <ExecutionPanel key={sessionId} sessionId={sessionId} revision={executionRevision} sending={sending} />}
+          {sessionId && <ExecutionPanel key={sessionId} sessionId={sessionId} revision={executionRevision} sending={sending} onResume={(run) => {
+            setToolsEnabled(true);
+            if (run.verificationCommand) setVerificationCommand(run.verificationCommand);
+            setResumeTarget({ id: run.id, goal: run.goal });
+            setInput((old) => old.trim() ? old : RESUME_PROMPT);
+            queueMicrotask(() => textareaRef.current?.focus());
+          }} />}
+          {resumeTarget && <div className="small mode-hint resume-notice" role="status" data-testid="resume-notice">
+            이어서 할 목표: “{resumeTarget.goal.length > 60 ? `${resumeTarget.goal.slice(0, 60)}…` : resumeTarget.goal}” · 도구 사용을 켰습니다. 내용을 확인한 뒤 전송하세요.{" "}
+            <button type="button" onClick={() => setResumeTarget(null)}>이어서 하기 취소</button>
+          </div>}
           <div className="chat-options">
             <label className="mode-control">응답 모드
               <select aria-label="응답 모드" value={mode} disabled={sending} onChange={(e) => setMode(e.target.value as ChatMode)}>

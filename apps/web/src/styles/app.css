@@ -403,3 +403,14 @@ select:focus-visible {
 .evidence-lines li { display: flex; gap: 10px; padding: 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .evidence-lines .line-no { flex: 0 0 auto; min-width: 4.5em; text-align: right; color: var(--text-muted); user-select: none; }
 .evidence-lines li.cited mark { background: color-mix(in srgb, var(--warning) 22%, transparent); color: inherit; }
+
+/* 목표 → 진행 단계 → 결과 (docs/42) */
+.goal-flow { margin: 8px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.goal-flow h3 { margin: 10px 0 4px; }
+.goal-flow h3:first-child { margin-top: 0; }
+.run-goal-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.flow-steps { margin: 0; padding-left: 22px; font-size: 12px; }
+.flow-steps li { margin: 2px 0; overflow-wrap: anywhere; }
+.flow-files { margin: 6px 0; padding-left: 18px; overflow-wrap: anywhere; }
+.goal-flow .verdict { display: block; white-space: normal; }
+.resume-control { margin-top: 10px; }

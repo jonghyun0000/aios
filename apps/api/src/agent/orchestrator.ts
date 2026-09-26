@@ -54,6 +54,8 @@ export interface RunInput {
    * 값이 아니라 함수로 받아 저장 직전에 읽는다. 없으면 기존 메시지 형식 그대로 저장한다.
    */
   assistantEvidence?: () => unknown;
+  /** 이어서 하기: 서버 실행 기록에서 만든 이전 실행의 사실(데이터). 시스템 프롬프트 끝에 붙인다. */
+  resumeContext?: string;
 }
 
 export class AgentOrchestrator {
@@ -118,7 +120,7 @@ export class AgentOrchestrator {
       workdir: input.projectRoot ?? "(none)",
     });
     const assembled = assemblePrompt({
-      systemCore: systemCore + (input.useMemory && input.conversationPreferences ? renderPreferences(input.conversationPreferences) : "") + (input.execution ? "\nSafety: All file writes and commands require explicit user approval. Commands have a read-only workspace and no network. Use write_file for edits. Do not claim verification from your own prose. Refusal means stop, not retry. Do not auto-commit." : ""),
+      systemCore: systemCore + (input.useMemory && input.conversationPreferences ? renderPreferences(input.conversationPreferences) : "") + (input.execution ? "\nSafety: All file writes and commands require explicit user approval. Commands have a read-only workspace and no network. Use write_file for edits. Do not claim verification from your own prose. Refusal means stop, not retry. Do not auto-commit." : "") + (input.execution && input.resumeContext ? `\n\n${input.resumeContext}` : ""),
       memoryFacts: memCtx.facts,
       ragChunks: [...(input.references ?? []), ...ctx.retriever.format(ragHits)],
       // 캐시 요약과 원문을 함께 넣으면 같은 사실이 중복되므로 DB 복원 시 요약을 제외한다.

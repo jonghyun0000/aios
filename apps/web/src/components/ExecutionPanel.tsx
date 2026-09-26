@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { Modal } from "./Modal.js";
+import { presentRun } from "../lib/goal-flow.js";
 
 interface Action {
   id: string; tool_name: string; status: string; purpose: string; arguments: { path?: string; command?: string; cwd?: string };
@@ -8,10 +9,14 @@ interface Action {
   before_hash: string | null; after_hash: string | null; expires_at: string | null;
   preview: { before: string | null; after: string } | null;
 }
-interface Run { id: string; status: string; summary: string; created_at: string; workspace_root: string; actions: Action[] }
-const label: Record<string, string> = { running: "실행 중", pending: "승인 대기", approved: "승인됨", rejected: "거절됨", expired: "승인 만료", passed: "실행 성공", failed: "실패·확인 필요", cancelled: "중단됨", interrupted: "연결 중단·확인 필요", verified: "지정 검증 통과", unverified: "동작 미검증", restored: "복구됨", restoring: "복구 중", restore_conflict: "복구 보류" };
+interface Run { id: string; status: string; summary: string; created_at: string; workspace_root: string; actions: Action[]; goal?: string | null; resumed_from?: string | null; verification_command?: string | null }
+const label: Record<string, string> = { running: "실행 중", pending: "승인 대기", approved: "승인됨", rejected: "거절됨", expired: "승인 만료", passed: "실행 성공", failed: "실패·확인 필요", unchanged: "변경 없음(이미 같은 내용)", cancelled: "중단됨", interrupted: "연결 중단·확인 필요", verified: "지정 검증 통과", unverified: "동작 미검증", restored: "복구됨", restoring: "복구 중", restore_conflict: "복구 보류" };
 
-export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: string; revision: number; sending: boolean }) {
+export function ExecutionPanel({ sessionId, revision, sending, onResume }: {
+  sessionId: string; revision: number; sending: boolean;
+  /** "이어서 하기": 입력란을 채우는 것까지만 한다. 전송은 사용자가 한다. */
+  onResume?: (run: { id: string; goal: string; verificationCommand: string | null }) => void;
+}) {
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -60,8 +65,24 @@ export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: st
     {(open || pending) && <div className="execution-records" id={recordsId} role="region" aria-label="승인과 실행 결과" tabIndex={0}>
       <p className="small muted">검증 결과는 실행 당시의 상태입니다. 이후 변경하면 다시 검증하세요. 명령은 네트워크 차단·작업 폴더 읽기 전용입니다. 최근 20회 기록을 표시합니다.</p>
       {!runs.length && <p className="small muted">도구를 사용하면 승인 요청과 실행 결과가 여기에 남습니다.</p>}
-      {runs.map((run, index) => <details key={run.id} open={index === 0} className="execution-run">
-        <summary>{label[run.status] ?? run.status} · {new Date(run.created_at).toLocaleString("ko-KR")}</summary>
+      {runs.map((run, index) => { const flow = presentRun(run, runs); return <details key={run.id} open={index === 0} className="execution-run" data-testid="execution-run">
+        <summary><span className="run-goal">{flow.goal.length > 80 ? `${flow.goal.slice(0, 80)}…` : flow.goal}</span> · {label[run.status] ?? run.status} · {new Date(run.created_at).toLocaleString("ko-KR")}</summary>
+        <div className="goal-flow" data-testid="goal-flow">
+          <h3 className="small">목표</h3>
+          <p className={flow.goalRecorded ? "run-goal-text" : "small muted"} data-testid="run-goal">{flow.goal}</p>
+          {flow.resumedFrom && <p className="small muted" data-testid="run-resumed">이전 실행을 이어서 한 실행입니다.</p>}
+          <h3 className="small">진행 단계 <span className="muted">(실제로 일어난 작업 순서)</span></h3>
+          {flow.steps.length ? <ol className="flow-steps" data-testid="run-steps">{flow.steps.map((step) => <li key={step.id}><span>{step.text.replace(/^\d+\. /, "")}</span> <span className={`badge ${step.tone === "wait" ? "" : step.tone}`}>{step.state}</span></li>)}</ol>
+            : <p className="small muted">아직 실행한 작업이 없습니다.</p>}
+          <h3 className="small">결과</h3>
+          <div data-testid="run-result">
+            <p className={`badge ${flow.verdict.tone === "wait" ? "" : flow.verdict.tone} verdict`}>{flow.verdict.text}</p>
+            {flow.files.length > 0 && <ul className="small flow-files">{flow.files.map((file) => <li key={`${file.path}-${file.hash}`}>파일 <code>{file.path}</code> · {file.state === "saved" ? "저장" : file.state === "unchanged" ? "변경 없음" : "복구됨"} · SHA-256 {file.hash}…</li>)}</ul>}
+            {flow.verification && <p className="small">검증 명령 <code>{flow.verification.command}</code> · {flow.verification.ran ? `종료 코드 ${flow.verification.exitCode}` : "실행되지 않음"}</p>}
+          </div>
+          {flow.resume.allowed && onResume && <div className="resume-control"><button disabled={sending || busy} onClick={() => onResume({ id: run.id, goal: flow.goal, verificationCommand: run.verification_command ?? null })}>이어서 하기</button> <span className="small muted">{flow.resume.reason} · 입력란에 채우기만 하고 전송하지 않습니다.</span></div>}
+          {!flow.resume.allowed && flow.resume.reason && <p className="small muted">{flow.resume.reason}</p>}
+        </div>
         <p className="small" data-testid="execution-summary">{run.summary || "도구 요청 또는 사용자 승인을 기다리고 있습니다."}</p>
         <p className="small muted execution-path">작업 폴더: {run.workspace_root}</p>
         {run.actions.map((action) => <article key={action.id} className={`execution-action ${action.status === "pending" ? "approval-pending" : ""}`}>
@@ -80,7 +101,7 @@ export function ExecutionPanel({ sessionId, revision, sending }: { sessionId: st
           {action.output && <details><summary>실행 결과 보기</summary><pre role="region" aria-label="명령 실행 결과 전체 내용" tabIndex={0}>{action.output}</pre></details>}
           {action.checkpoint && action.decided_at && !action.restored_at && !["pending", "approved", "running", "rejected", "expired"].includes(action.status) && <button disabled={busy || sending} onClick={() => setRestore(action)}>이 변경 복구</button>}
         </article>)}
-      </details>)}
+      </details>; })}
     </div>}
     {restore && <Modal title="파일 변경 복구" busy={busy} onClose={() => setRestore(null)}>
       <p className="execution-path">{restore.arguments.path}</p>

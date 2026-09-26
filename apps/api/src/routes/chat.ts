@@ -12,6 +12,8 @@ import { requireRole } from "../auth.js";
 const BodySchema = z.object({
   content: z.string().min(1).max(100_000),
   verificationCommand: z.string().trim().min(1).max(4000).optional(),
+  // 중단·실패한 실행을 이어서 한다(docs/42). 서버가 소유권·상태·횟수를 확인한다.
+  resumeRunId: z.string().uuid().optional(),
   mode: z.enum(["auto", "fast", "thorough"]).optional(),
   routing: z
     .object({
@@ -53,6 +55,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
       await executionService(ctx).assertOrg(req.auth.orgId);
     }
     if (body.verificationCommand && !body.tools.enabled) throw new ValidationError("검증 명령은 도구 사용을 켜야 실행할 수 있습니다.");
+    if (body.resumeRunId && !body.tools.enabled) throw new ValidationError("이어서 하기는 도구 사용을 켜야 할 수 있습니다.");
     if (running.has(sessionId)) return reply.code(409).send({ error: { code: "session_busy", message: "이 대화에서 응답 생성 또는 변경 중입니다." } });
     running.add(sessionId);
     let execution: ExecutionRun | undefined;
@@ -70,6 +73,8 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
     // 명시 모델은 스트림을 열고 사용자 메시지를 저장하기 **전에** 확인한다. 뒤에서 거부하면
     // HTTP 200으로 시작한 뒤 오류가 나고, 답 없는 질문이 대화 기록에 남는다(docs/41).
     if (body.routing.model) ctx.router.resolveModel(body.routing.model);
+    // 이어서 하기 검사도 스트림·메시지 저장 전에 한다. 거부된 요청이 흔적을 남기지 않게.
+    const resume = body.resumeRunId ? await executionService(ctx).prepareResume(req.auth.orgId, sessionId, body.resumeRunId) : undefined;
 
     // 쿼터는 스트림 시작 전에 확인 — 시작한 스트림을 끊는 것보다 싸고 정직하다
     if (req.auth.via !== "local") await ctx.usage.checkQuota(req.auth.orgId);
@@ -101,7 +106,8 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
     const heartbeat = setInterval(() => reply.raw.write(": ping\n\n"), 15_000);
 
     try {
-      if (body.tools.enabled) execution = await executionService(ctx).start(req.auth.orgId, req.auth.userId, sessionId, body.verificationCommand, controller.signal, send);
+      if (body.tools.enabled) execution = await executionService(ctx).start(req.auth.orgId, req.auth.userId, sessionId, body.verificationCommand, controller.signal, send,
+        { goal: resume ? resume.goal ?? body.content : body.content, resumedFrom: body.resumeRunId });
       for await (const event of orchestrator.run({
         orgId: req.auth.orgId,
         userId: req.auth.userId,
@@ -125,6 +131,7 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
           sources: delivered.map((i) => references.sources[i]!), referenceMode,
         }); } : undefined,
         assistantEvidence: () => evidence,
+        resumeContext: resume?.context,
         references: references.chunks,
         mode: body.mode,
         taskClass: body.routing.taskClass,

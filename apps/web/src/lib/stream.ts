@@ -37,6 +37,8 @@ export interface SendOptions {
   content: string;
   toolsEnabled?: boolean;
   verificationCommand?: string;
+  /** 이어서 할 실행 ID(docs/42). 서버가 소유권·상태·횟수를 다시 확인한다. */
+  resumeRunId?: string;
   mode?: ChatMode;
   useMemory?: boolean;
   signal?: AbortSignal;
@@ -58,6 +60,7 @@ export async function streamChat(opts: SendOptions): Promise<void> {
       mode: opts.mode ?? "auto",
       tools: { enabled: opts.toolsEnabled ?? false },
       verificationCommand: opts.toolsEnabled ? opts.verificationCommand?.trim() || undefined : undefined,
+      resumeRunId: opts.toolsEnabled ? opts.resumeRunId : undefined,
       context: { useMemory: opts.useMemory !== false },
     }),
     signal: opts.signal,
