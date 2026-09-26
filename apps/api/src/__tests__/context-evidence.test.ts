@@ -87,7 +87,7 @@ describe("bounded session preferences through the real chat route", () => {
       const res = await f.send(true, "release milestone");
       const events = res.body.split("\n\n").filter((s) => s.startsWith("data: ")).map((s) => JSON.parse(s.slice(6)) as Record<string, unknown>);
       const context = events.find((e) => e.type === "workspace_context");
-      expect(context?.sources).toEqual([{ id: "R2", fileName: "small.txt", startLine: 1, endLine: 1 }]);
+      expect(context?.sources).toEqual([{ id: "R2", fileId: "small", fileName: "small.txt", startLine: 1, endLine: 1 }]);
       expect(context?.excerpted).toBe(true);
       expect(f.stream.mock.calls[0]![0].system).toContain("ORBIT-TEST");
       expect(f.stream.mock.calls[0]![0].system).not.toContain("large.txt");
@@ -113,7 +113,7 @@ describe("attached evidence relevance", () => {
   });
   it("reports exact selected filenames and line ranges without treating names as instructions", () => {
     const result = referenceChunks([{ id: "f", name: 'quoted".txt', content: "first\nsecond\nrelease = TEST" }], "release");
-    expect(result.sources).toEqual([{ id: "R1", fileName: 'quoted".txt', startLine: 1, endLine: 3 }]);
+    expect(result.sources).toEqual([{ id: "R1", fileId: "f", fileName: 'quoted".txt', startLine: 1, endLine: 3 }]);
     expect(result.chunks[0]).toContain(`Source [R1]: ${JSON.stringify('quoted".txt')}, lines 1-3`);
     expect(result.referenceMode).toBe("matched");
   });
@@ -121,7 +121,7 @@ describe("attached evidence relevance", () => {
     const result = referenceChunks(Array.from({ length: 5 }, (_, i) => ({ id: `f${i}`, name: `notes-${i}.txt`, content: "background ".repeat(300) })), "이 파일들을 요약해줘");
     expect(result.referenceMode).toBe("overview"); expect(result.excerpted).toBe(true);
     expect(new Set(result.sources.map((s) => s.fileName)).size).toBe(4);
-    expect(referenceChunks([], "question")).toEqual({ chunks: [], sources: [], excerpted: false, referenceMode: "none" });
+    expect(referenceChunks([], "question")).toEqual({ chunks: [], sources: [], excerpts: [], excerpted: false, referenceMode: "none" });
   });
 });
 

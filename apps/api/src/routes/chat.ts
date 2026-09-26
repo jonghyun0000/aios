@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { NotFoundError, ValidationError } from "@aios/shared";
 import type { AppContext } from "../context.js";
 import { AgentOrchestrator } from "../agent/orchestrator.js";
-import { loadConversationPreferences, loadReferences, loadSavedHistory, referenceChunks, sessionLocks } from "../workspace.js";
+import { loadConversationPreferences, loadReferences, loadSavedHistory, referenceChunks, sessionLocks, type MessageEvidence } from "../workspace.js";
 import { PREFERENCE_SCAN_LIMIT } from "../agent/preferences.js";
 import { executionService, type ExecutionRun } from "../execution/service.js";
 import { registerExecutionRoutes } from "./execution.js";
@@ -78,6 +78,8 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
       body.context.useMemory ? loadConversationPreferences(ctx, req.auth.orgId, sessionId, body.content) : Promise.resolve(undefined),
     ]) : [undefined, [], undefined];
     const references = referenceChunks(files, body.content);
+    // 조립 결과(입력 예산으로 잘린 뒤)에서 실제로 모델에 들어간 구간만 근거로 남긴다.
+    let evidence: MessageEvidence | undefined;
     const controller = new AbortController();
     const onClose = () => { if (!reply.raw.writableEnded) controller.abort(); };
     reply.raw.on("close", onClose);
@@ -109,10 +111,17 @@ export function registerChatRoutes(app: FastifyInstance, ctx: AppContext): void 
         content: body.content,
         savedHistory,
         conversationPreferences: preferenceContext?.preferences,
-        onContextPrepared: body.mode ? (prepared) => send({ type: "workspace_context", historyCount: prepared.historyCount, files: files.map((file) => file.name), excerpted: references.excerpted || prepared.referenceIndexes.length < references.chunks.length,
+        onContextPrepared: body.mode ? (prepared) => {
+          const delivered = prepared.referenceIndexes.filter((i) => i < references.sources.length);
+          const excerpted = references.excerpted || delivered.length < references.chunks.length;
+          const referenceMode = delivered.length ? references.referenceMode : "none";
+          if (files.length) evidence = { version: 1, referenceMode, excerpted, files: files.map((file) => ({ id: file.id, name: file.name })),
+            sources: delivered.map((i) => ({ ...references.sources[i]!, excerpt: references.excerpts[i]! })) };
+          send({ type: "workspace_context", historyCount: prepared.historyCount, files: files.map((file) => file.name), excerpted,
           memory: { enabled: body.context.useMemory, historyLimit: 100, preferenceScanLimit: PREFERENCE_SCAN_LIMIT, scannedUserMessages: preferenceContext?.scannedUserMessages ?? 0, restoredPreferences: preferenceContext?.preferences ?? [] },
-          sources: prepared.referenceIndexes.map((i) => references.sources[i]!), referenceMode: prepared.referenceIndexes.length ? references.referenceMode : "none",
-        }) : undefined,
+          sources: delivered.map((i) => references.sources[i]!), referenceMode,
+        }); } : undefined,
+        assistantEvidence: () => evidence,
         references: references.chunks,
         mode: body.mode,
         taskClass: body.routing.taskClass,

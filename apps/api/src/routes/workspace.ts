@@ -2,10 +2,16 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { NotFoundError, ValidationError } from "@aios/shared";
 import type { AppContext } from "../context.js";
-import { sessionLocks, validateReference } from "../workspace.js";
+import { sessionLocks, validateReference, evidenceStatus } from "../workspace.js";
 import { requireRole } from "../auth.js";
 
 const idSchema = z.string().uuid();
+// 저장된 근거는 우리가 쓴 값이지만 DB 행은 외부 입력처럼 다시 검증한다(깨진 JSON이 500이 되지 않게).
+const EvidenceSchema = z.object({
+  version: z.literal(1),
+  sources: z.array(z.object({ id: z.string(), fileId: z.string().uuid(), fileName: z.string().min(1).max(180),
+    startLine: z.number().int().min(1), endLine: z.number().int().min(1), excerpt: z.string().max(4000) })).max(8),
+}).passthrough();
 const titleSchema = z.string().trim().min(1).max(200);
 export function registerWorkspaceRoutes(app: FastifyInstance, ctx: AppContext): void {
   const ownedProject = async (id: string, org: string) => {
@@ -50,6 +56,26 @@ export function registerWorkspaceRoutes(app: FastifyInstance, ctx: AppContext): 
     const files = await ctx.pool.query(`select id,name,project_id,octet_length(content) as bytes,created_at from workspace_files
       where org_id = $1 and deleted_at is null and (session_id = $2 or project_id = $3) order by created_at,id`, [req.auth.orgId, id, rows[0].project_id]);
     return { session: rows[0], files: rows[0].deleted_at ? [] : files.rows };
+  });
+
+  // 답변 근거 열람. 저장된 근거 기록만 읽고 아무것도 만들지 않으므로 viewer도 쓸 수 있다.
+  // 연결 해제된 파일은 답변 때 전달한 원문만 돌려주고 파일 전체 문맥은 열지 않는다.
+  app.get("/v1/sessions/:id/messages/:messageId/evidence/:sourceId", async (req) => {
+    const { id, messageId, sourceId } = z.object({ id: idSchema, messageId: idSchema, sourceId: z.string().regex(/^R[1-9][0-9]{0,2}$/) }).parse(req.params);
+    const message = await ctx.pool.query<{ content: unknown; created_at: Date; project_id: string | null }>(
+      `select m.content, m.created_at, s.project_id from messages m join sessions s on s.id = m.session_id
+        where m.id = $1 and m.session_id = $2 and s.org_id = $3 and s.deleted_at is null and m.role = 'assistant'`, [messageId, id, req.auth.orgId]);
+    if (!message.rows.length) throw new NotFoundError("message");
+    const parsed = EvidenceSchema.safeParse((message.rows[0]!.content as { evidence?: unknown } | null)?.evidence);
+    const source = parsed.success ? parsed.data.sources.find((item) => item.id === sourceId) : undefined;
+    if (!source) throw new NotFoundError("evidence");
+    const file = await ctx.pool.query<{ name: string; content: string; deleted_at: Date | null }>(
+      "select name, content, deleted_at from workspace_files where id = $1 and org_id = $2", [source.fileId, req.auth.orgId]);
+    const newer = await ctx.pool.query<{ n: number }>(
+      `select count(*)::int as n from workspace_files where org_id = $1 and name = $2 and id <> $3 and deleted_at is null
+        and created_at > $4 and (session_id = $5 or ($6::uuid is not null and project_id = $6))`,
+      [req.auth.orgId, source.fileName, source.fileId, message.rows[0]!.created_at, id, message.rows[0]!.project_id]);
+    return { answeredAt: message.rows[0]!.created_at, ...evidenceStatus(source, file.rows[0], (newer.rows[0]?.n ?? 0) > 0) };
   });
 
   // 변경은 동일 대화 전송과 직렬화한다. 프로젝트 파일 수는 DB 행 잠금으로 다른 대화와도 직렬화한다.

@@ -7,6 +7,8 @@ import { AsyncBoundary } from "../components/Async.js";
 import { useRouter } from "../lib/router.js";
 import { useSessions } from "../lib/sessions.js";
 import { shouldSendOnEnter } from "../lib/chat-input.js";
+import { presentMessageEvidence } from "../lib/evidence.js";
+import { EvidenceDialog, EvidenceList } from "../components/EvidencePanel.js";
 import { presentWorkspaceContext, type WorkspacePresentation } from "../lib/workspace-context.js";
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { ExecutionPanel } from "../components/ExecutionPanel.js";
@@ -73,6 +75,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspaceStarting, setWorkspaceStarting] = useState(false);
   const [workspaceContext, setWorkspaceContext] = useState<WorkspacePresentation | null>(null);
+  // 열린 근거 대화 상자. 메시지 ID + 구간 ID 로 저장된 근거만 연다.
+  const [openEvidence, setOpenEvidence] = useState<{ messageId: string; sourceId: string } | null>(null);
   const composingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const followScrollRef = useRef(true);
@@ -111,6 +115,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   }, [sessionId]);
   useEffect(() => {
     followScrollRef.current = true;
+    setOpenEvidence(null);
     if (!sendingRef.current) { setStrategy(null); setTimings({}); setContextNotice(""); setWorkspaceContext(null); }
     if (activeSessionRef.current && activeSessionRef.current !== sessionId) abortRef.current?.abort();
   }, [sessionId]);
@@ -253,6 +258,12 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
           void createSession("새 대화", controller.signal).then(() => setWorkspaceOpen(true)).catch((err: Error) => { if (!controller.signal.aborted) setSendError(err.message); }).finally(() => { abortRef.current = null; setWorkspaceStarting(false); setBusy(false); });
         }}>자료·프로젝트</button><span className="badge">{mode === "auto" ? "자동 선택" : PATH_LABEL[mode]}</span></div>
       </div>
+      {openEvidence && sessionId && (() => {
+        const message = history.data?.messages.find((m) => m.id === openEvidence.messageId);
+        const source = message ? presentMessageEvidence(message.content)?.sources.find((item) => item.id === openEvidence.sourceId) : undefined;
+        return <EvidenceDialog key={`${openEvidence.messageId}:${openEvidence.sourceId}`} sessionId={sessionId} messageId={openEvidence.messageId} sourceId={openEvidence.sourceId}
+          fallback={source && { label: `${source.id} · ${source.label}`, excerpt: source.excerpt, startLine: source.startLine }} onClose={() => setOpenEvidence(null)} />;
+      })()}
       {workspaceOpen && sessionId && <WorkspacePanel key={sessionId} sessionId={sessionId} onClose={() => setWorkspaceOpen(false)} />}
 
       <div className="chat-layout">
@@ -270,6 +281,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
               <AsyncBoundary loading={history.loading && !history.data} error={history.error}>
                 {history.data?.messages.map((m) => {
                   const calls = messageToolCalls(m.content);
+                  const evidence = m.role === "assistant" ? presentMessageEvidence(m.content) : null;
                   return (
                     <div className="msg" key={m.id}>
                       <div className="msg-role">
@@ -284,6 +296,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
                             ))}
                           </div>
                         )}
+                        {evidence && <EvidenceList evidence={evidence} onOpen={(sourceId) => setOpenEvidence({ messageId: m.id, sourceId })} />}
                       </div>
                     </div>
                   );

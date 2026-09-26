@@ -392,3 +392,14 @@ select:focus-visible {
 .verification-command { display: grid; gap: 5px; margin: 6px 0; }
 .verification-command input { width: 100%; }
 @media (max-width: 600px) { .change-preview { grid-template-columns: minmax(0,1fr); } .execution-records { max-height: 32vh; } .execution-action .row-between { flex-wrap: wrap; gap: 6px; } }
+
+/* 답변 근거 — 전달 구간 목록과 원문 확인 */
+.evidence { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); }
+.evidence-sources { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.evidence-link { font-size: 12px; padding: 2px 8px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.evidence-status { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 6px; }
+.evidence-status .badge { display: block; white-space: normal; }
+.evidence-lines { list-style: none; padding: 8px 0; margin: 6px 0 14px; border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; font-size: 12px; }
+.evidence-lines li { display: flex; gap: 10px; padding: 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.evidence-lines .line-no { flex: 0 0 auto; min-width: 4.5em; text-align: right; color: var(--text-muted); user-select: none; }
+.evidence-lines li.cited mark { background: color-mix(in srgb, var(--warning) 22%, transparent); color: inherit; }

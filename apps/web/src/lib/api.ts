@@ -150,6 +150,8 @@ export interface MessageContent {
   text?: string;
   toolCalls?: { id: string; name: string; arguments?: Record<string, unknown> }[] | null;
   toolCallId?: string;
+  /** 답변 근거(서버 저장값). 모양은 presentMessageEvidence()가 다시 확인한다. */
+  evidence?: unknown;
 }
 
 export interface MessageRow {

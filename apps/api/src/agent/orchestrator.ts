@@ -49,6 +49,11 @@ export interface RunInput {
    */
   completionCheck?: CompletionCheck;
   execution?: ExecutionRun;
+  /**
+   * 답변과 함께 저장할 근거 기록. 컨텍스트 조립 뒤에야 실제 전달 구간이 정해지므로
+   * 값이 아니라 함수로 받아 저장 직전에 읽는다. 없으면 기존 메시지 형식 그대로 저장한다.
+   */
+  assistantEvidence?: () => unknown;
 }
 
 export class AgentOrchestrator {
@@ -277,8 +282,9 @@ export class AgentOrchestrator {
     input.signal?.throwIfAborted();
     const { ctx } = this;
     const assistantMsg: ChatMessage = { role: "assistant", content: fullText };
+    const evidence = input.assistantEvidence?.();
     await Promise.all([
-      this.persistMessage(input.sessionId, assistantMsg),
+      this.persistMessage(input.sessionId, assistantMsg, evidence),
       ctx.memory.record(input.sessionId, assistantMsg),
     ]);
 
@@ -290,10 +296,10 @@ export class AgentOrchestrator {
     });
   }
 
-  private async persistMessage(sessionId: string, m: ChatMessage): Promise<void> {
+  private async persistMessage(sessionId: string, m: ChatMessage, evidence?: unknown): Promise<void> {
     await this.ctx.pool.query(
       `insert into messages (id, session_id, role, content) values ($1, $2, $3, $4)`,
-      [randomUUID(), sessionId, m.role, JSON.stringify({ text: m.content, toolCalls: m.toolCalls ?? null })],
+      [randomUUID(), sessionId, m.role, JSON.stringify({ text: m.content, toolCalls: m.toolCalls ?? null, ...(evidence === undefined ? {} : { evidence }) })],
     );
     // 최근 대화 순서는 생성일이 아니라 마지막 메시지 시각이다.
     await this.ctx.pool.query("update sessions set updated_at = now() where id = $1", [sessionId]);
