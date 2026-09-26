@@ -37,6 +37,10 @@ try {
     return res;
   }
   await request("/readyz");
+  if (process.env.AIOS_CI_GOAL_FLOW === "1") {
+    const { verifyGoalFlow } = await import("./goal-flow.js");
+    await verifyGoalFlow(ctx, base, sessions);
+  }
   for (let i = 0; i < 3; i++) {
     const { id } = await (await request("/v1/sessions", { title: `CI ${i}` })).json() as { id: string };
     assert.match(id, /^[0-9a-f-]{36}$/); sessions.push(id);

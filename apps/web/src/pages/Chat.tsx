@@ -359,7 +359,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
 
           {sessionId && <ExecutionPanel key={sessionId} sessionId={sessionId} revision={executionRevision} sending={sending} onResume={(run) => {
             setToolsEnabled(true);
-            if (run.verificationCommand) setVerificationCommand(run.verificationCommand);
+            // 명령 없는 목표를 선택하면 다른 목표의 검증 명령이 초안에 섞이지 않게 비운다.
+            setVerificationCommand(run.verificationCommand ?? "");
             setResumeTarget({ id: run.id, goal: run.goal });
             setInput((old) => old.trim() ? old : RESUME_PROMPT);
             queueMicrotask(() => textareaRef.current?.focus());

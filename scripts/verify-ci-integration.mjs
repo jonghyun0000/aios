@@ -29,6 +29,7 @@ const env = {
   LOCAL_LLM_PROTOCOL: "openai", LOCAL_LLM_MODELS: process.env.CI_CHAT_MODEL || "qwen2.5:0.5b",
   LOCAL_EMBED_MODEL: "bge-m3", LOCAL_LLM_CONTEXT: "8192", LOCAL_CHAT_CONCURRENCY: "1",
   LOCAL_EMBED_CONCURRENCY: "1", LOCAL_NO_AUTH: "1",
+  ...(process.env.AIOS_CI_GOAL_FLOW === "1" ? { AIOS_CI_GOAL_FLOW: "1", PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH } : {}),
 };
 function child(args, extra) {
   return new Promise((resolve, reject) => {
@@ -67,7 +68,12 @@ try {
     const workspace = join(runRoot, "workspaces", "fixture"); await mkdir(workspace, { recursive: true });
     const extra = { DATABASE_URL: databaseUrl, LOCAL_WORKSPACE_ROOT: workspace, LOCAL_NO_AUTH_ORG_SLUG: `ci-${randomUUID()}` };
     const migration = await child([join(fault ? mutant : root, "scripts/migrate.mjs")], extra);
-    assert.equal(migration.code, 0, "migration process failed");
+    // 0006 이후에는 누락된 0005의 표를 후속 SQL도 참조한다. 음성 경로만 그 정확한
+    // 오류를 허용하고, 아래 실제 API의 누락 검출까지 확인한다. 정상 경로는 여전히 엄격하다.
+    if (fault && migration.code !== 0) {
+      assert.equal(migration.code, 1);
+      assert.match(migration.output, /relation "execution_runs" does not exist/);
+    } else assert.equal(migration.code, 0, "migration process failed");
     // CLI의 IPC 소켓은 exFAT에서 지원되지 않는다. 단일 Node 로더로 실행하면 소켓·래퍼가 필요 없다.
     const run = await child(["--import", "./apps/verify/node_modules/tsx/dist/loader.mjs", "apps/verify/src/ci-integration.ts"], extra);
     if (fault) {

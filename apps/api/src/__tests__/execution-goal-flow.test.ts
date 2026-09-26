@@ -22,7 +22,7 @@ async function service(rows: (sql: string) => Record<string, unknown>[] = () => 
   const query = vi.fn(async (sql: string, _params?: unknown[]) => ({ rows: rows(sql) }));
   const registry = new ToolRegistry(); registry.register(writeFileTool);
   const ctx = { env: { LOCAL_WORKSPACE_ROOT: root }, pool: { query }, tools: registry, executor: new ToolExecutor(registry) } as unknown as AppContext;
-  return { root, store, query, svc: new ExecutionService(ctx, 60_000, store) };
+  return { root, store, query, execute: vi.spyOn(ctx.executor, "execute"), svc: new ExecutionService(ctx, 60_000, store) };
 }
 const write = (path: string, content: string) => ({ id: "call", name: "write_file", arguments: { path, content } });
 
@@ -34,12 +34,22 @@ describe("같은 내용 쓰기의 중복 방지 (docs/42 §2-5)", () => {
     const result = await direct.execute(write("sum.js", "console.log(55);\n"));
     expect(result.ok).toBe(true); expect(result.output).toContain("변경 없음");
     expect(f.svc.pending.size).toBe(0);
+    expect(f.execute).not.toHaveBeenCalled();
     expect(await readdir(f.store)).toEqual([]);
     expect(f.query.mock.calls.some(([sql]) => sql.includes("status='unchanged'"))).toBe(true);
     expect(f.query.mock.calls.some(([sql]) => sql.includes("status='pending'"))).toBe(false);
     await direct.finish();
     const summary = f.query.mock.calls.at(-1)![1]!;
     expect(summary).toEqual([RUN, "unverified", expect.stringContaining("1개 파일은 이미 같은 내용이라 쓰지 않음")]);
+  });
+
+  it("같은 내용이어도 작업 폴더 밖 경로는 거부한다", async () => {
+    const f = await service();
+    await writeFile(join(f.store, "outside.txt"), "same");
+    const direct = new ExecutionRun(f.svc, RUN, "org", undefined, SESSION, new AbortController().signal, () => {});
+    expect((await direct.execute(write(join(f.store, "outside.txt"), "same"))).ok).toBe(false);
+    expect(f.svc.pending.size).toBe(0); expect(f.execute).not.toHaveBeenCalled();
+    expect(await readFile(join(f.store, "outside.txt"), "utf8")).toBe("same");
   });
 
   it.each([["다른 내용", "console.log(55);\n", "console.log(56);\n"], ["새 파일", null, "console.log(1);\n"]])("%s이면 지금처럼 승인을 요청한다(쓰기 전)", async (_label, before, after) => {
