@@ -4,7 +4,7 @@ import { AiosError } from "@aios/shared";
 import type { AppContext } from "../context.js";
 import { registerChatRoutes } from "../routes/chat.js";
 import { registerWorkspaceRoutes } from "../routes/workspace.js";
-import { evidenceStatus, referenceChunks, type MessageEvidence, type ReferenceFile } from "../workspace.js";
+import { evidenceStatus, numberLines, referenceChunks, type MessageEvidence, type ReferenceFile } from "../workspace.js";
 
 const SESSION = "10000000-0000-4000-8000-000000000001";
 const MESSAGE = "10000000-0000-4000-8000-000000000002";
@@ -18,9 +18,10 @@ describe("구간 선택이 근거로 저장할 원문을 돌려준다", () => {
     const result = referenceChunks([{ id: FILE, name: "제품계획.md", content: planContent }], "출시일은?");
     expect(result.sources[0]).toMatchObject({ id: "R1", fileId: FILE, fileName: "제품계획.md", startLine: 1, endLine: 41 });
     expect(result.excerpts).toHaveLength(result.sources.length);
-    // 모델에 들어간 문자열(JSON 인용)과 저장 원문이 같은 텍스트다.
-    expect(result.chunks[0]).toContain(JSON.stringify(result.excerpts[0]));
-    expect(result.excerpts[0]).toContain("출시일: 2026-11-03");
+    // 모델 입력에는 실제 행 번호가 붙고(docs/40), 저장 원문에는 붙지 않는다.
+    expect(result.chunks[0]).toContain(JSON.stringify(numberLines(result.excerpts[0]!, 1)));
+    expect(result.chunks[0]).toContain("40| 출시일: 2026-11-03");
+    expect(result.excerpts[0]).toContain("출시일: 2026-11-03"); expect(result.excerpts[0]).not.toContain("40|");
   });
 
   it("1000자를 넘는 줄은 조각으로 전달되고, 조각도 현재 파일과 대조된다", () => {
@@ -187,5 +188,28 @@ describe("채팅 라우트가 실제로 모델에 들어간 구간만 답변과 
       expect((await f.send("안녕")).statusCode).toBe(200);
       expect(f.inserts.find((row) => row.role === "assistant")!.content).toEqual({ text: "2026-11-03", toolCalls: null });
     } finally { await f.app.close(); }
+  });
+});
+
+describe("모델 입력의 행 번호 접두어", () => {
+  it("블록 시작 행부터 번호를 붙이고 끝 줄바꿈은 빈 행으로 만들지 않는다", () => {
+    expect(numberLines("가\n나\n", 120)).toBe("120| 가\n121| 나");
+    expect(numberLines("끝 줄바꿈 없음", 7)).toBe("7| 끝 줄바꿈 없음");
+    expect(numberLines("\n\n다\n", 3)).toBe("3| \n4| \n5| 다");
+  });
+  it("CRLF 파일의 \\r 은 원문 그대로 두고 번호만 붙인다", () => expect(numberLines("a\r\nb\r\n", 10)).toBe("10| a\r\n11| b\r"));
+  it("긴 줄의 1000자 조각에는 그 줄 번호를 붙인다", () => {
+    const content = `머리말\n${"가".repeat(2500)}\n꼬리말`;
+    const result = referenceChunks([{ id: FILE, name: "긴줄.txt", content }], "가가");
+    const i = result.excerpts.findIndex((excerpt) => excerpt.length === 1000);
+    expect(result.chunks[i]).toContain(JSON.stringify(`2| ${"가".repeat(1000)}`));
+  });
+  it("파일 중간에서 시작하는 블록은 실제 행 번호로 시작한다", () => {
+    const content = Array.from({ length: 300 }, (_, i) => (i === 211 ? "비밀번호 교체 주기: 45일" : `잡음 ${i + 1}`)).join("\n");
+    const result = referenceChunks([{ id: FILE, name: "운영.md", content }], "교체 주기");
+    const hit = result.sources[0]!;
+    expect(hit.startLine).toBeGreaterThan(1);
+    expect(result.chunks[0]).toContain(`212| 비밀번호 교체 주기: 45일`);
+    expect(result.chunks[0]).toContain(`${hit.startLine}| `);
   });
 });

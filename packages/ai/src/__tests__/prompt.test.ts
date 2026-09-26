@@ -4,6 +4,14 @@ import { estimateMessagesTokens, estimateTokens } from "@aios/shared";
 import { assemblePrompt, renderTemplate, CHAT_SYSTEM_TEMPLATE, SYSTEM_CORE_TEMPLATE } from "../prompt.js";
 
 describe("assemblePrompt", () => {
+  it("참고자료가 있으면 줄 앞 숫자가 파일 행 번호임을 알리고, 그 숫자로 인용하게 한다(docs/40)", () => {
+    const out = assemblePrompt({ systemCore: "CORE", memoryFacts: [], ragChunks: ['"40| 출시일: 2026-11-03"'], history: [], userMessage: "출시일?", budgetTokens: 2000 });
+    expect(out.system).toContain("Each excerpt line begins with its line number in the file");
+    expect(out.system).toContain("use that number instead of counting lines");
+    const none = assemblePrompt({ systemCore: "CORE", memoryFacts: [], ragChunks: [], history: [], userMessage: "안녕", budgetTokens: 2000 });
+    expect(none.system).not.toContain("Each excerpt line begins");
+  });
+
   it("never drops the system core or user message", () => {
     const out = assemblePrompt({
       systemCore: "CORE",
