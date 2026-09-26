@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { referenceChunks } from "../../../../api/src/workspace.js";
-import { LINE_CITATION_TASKS, VALUE_ONLY_TASKS, citedLines, grade } from "../line-citation-tasks.js";
+import { LINE_CITATION_TASKS, VALUE_ONLY_TASKS } from "../line-citation-tasks.js";
+import { citedLines, grade } from "../line-citation-grader.js";
 
 const all = [...LINE_CITATION_TASKS, ...VALUE_ONLY_TASKS];
 
@@ -54,5 +55,25 @@ describe("채점기", () => {
   it("값 과제는 행 번호를 보지 않는다", () => {
     const v = VALUE_ONLY_TASKS[0]!;
     expect(grade(v, "26 개월").pass).toBe(true); expect(grade(v, "24개월").pass).toBe(false);
+  });
+});
+
+describe("채점기 v2 — v1 을 폐기하게 만든 실제 모델 출력(기준 실행 첫 5건)", () => {
+  const byId = (id: string) => LINE_CITATION_TASKS.find((task) => task.id === id)!;
+  it.each([
+    ["meeting-budget-47", "최종 결정된 예산 상한의 값은 4,200만 원이며, 이 값이 적힌 행 번호는 38입니다.", [38], false],
+    ["meeting-owner-12", "값: 오세린, 행 번호: 8", [8], false],
+    ["config-timeout-133", "request_timeout_ms 값은 7250이며, 이 값이 적힌 행 번호는 133입니다.", [133], true],
+    ["config-port-6", "listen_port 값은 48213이며, 이 값이 적힌 행 번호는 2입니다.", [2], false],
+    ["csv-busan-212", "부산 지점의 상태 값은 \"점검필요\"이며, 해당 값이 적힌 행 번호는 1212입니다.", [1212], false],
+  ] as const)("%s", (id, text, lines, pass) => {
+    const g = grade(byId(id), text);
+    expect(g.lines).toEqual(lines); expect(g.pass).toBe(pass);
+  });
+  it("영어 표현과 앞 글자가 붙은 '행'을 구분한다", () => {
+    expect(citedLines("The uptime commitment is on line number 164.")).toEqual([164]);
+    expect(citedLines("line: 77")).toEqual([77]);
+    expect(citedLines("진행 3단계, 시행 2026년")).toEqual([]);
+    expect(citedLines("행: 40")).toEqual([40]);
   });
 });

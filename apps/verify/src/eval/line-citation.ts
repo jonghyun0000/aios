@@ -4,7 +4,8 @@ import Fastify from "fastify";
 import { AiRouter, LocalAdapter, localModels } from "@aios/ai";
 import type { AppContext } from "../../../api/src/context.js";
 import { registerChatRoutes } from "../../../api/src/routes/chat.js";
-import { LINE_CITATION_TASKS, VALUE_ONLY_TASKS, grade, type LineCitationTask } from "./line-citation-tasks.js";
+import { LINE_CITATION_TASKS, VALUE_ONLY_TASKS, type LineCitationTask } from "./line-citation-tasks.js";
+import { grade } from "./line-citation-grader.js";
 import { rate, compare, formatRate } from "./stats.js";
 
 /**
@@ -21,6 +22,7 @@ if (process.env.LINE_COMPARE) {
   const load = async (f: string) => JSON.parse(await readFile(f, "utf8")) as { phase: string; suiteHash: string; complete: boolean; results: Result[] };
   const [before, after] = [await load(a!), await load(b!)];
   if (before.suiteHash !== after.suiteHash) throw new Error("과제 해시가 다르다 — 비교할 수 없다");
+  if ((before as { graderHash?: string }).graderHash !== (after as { graderHash?: string }).graderHash) throw new Error("채점기가 다르다 — 비교할 수 없다");
   if (!before.complete || !after.complete) throw new Error("완료되지 않은 결과는 비교하지 않는다");
   for (const kind of ["line", "value"]) {
     const x = before.results.filter((r) => r.kind === kind), y = after.results.filter((r) => r.kind === kind);
@@ -45,6 +47,7 @@ const adapter = new LocalAdapter(base, "bge-m3", undefined, 4, 1, "ollama", cont
 const router = new AiRouter({ local: adapter }, { catalog: localModels([model], contextWindow) });
 const hash = async (paths: string[]) => { const h = createHash("sha256"); for (const p of paths) h.update(p).update(await readFile(new URL(p, import.meta.url))); return h.digest("hex"); };
 const suiteHash = createHash("sha256").update(await readFile(new URL("./line-citation-tasks.ts", import.meta.url))).digest("hex");
+const graderHash = createHash("sha256").update(await readFile(new URL("./line-citation-grader.ts", import.meta.url))).digest("hex");
 const implementationHash = await hash(["../../../api/src/workspace.ts", "../../../api/src/agent/orchestrator.ts", "../../../api/src/routes/chat.ts", "../../../../packages/ai/src/prompt.ts"]);
 await mkdir(dir, { recursive: true });
 const file = `${dir}/${phase}-${new Date().toISOString().replaceAll(":", "-")}.json`;
@@ -78,7 +81,7 @@ async function run(task: LineCitationTask, repeat: number): Promise<Result> {
 }
 
 const tasks = [...LINE_CITATION_TASKS, ...VALUE_ONLY_TASKS];
-const metadata = { phase, model, contextWindow, repeats, suiteHash, implementationHash, mode: "auto", scope: "real chat route + local model; synthetic DB; holdout tasks committed before any run" };
+const metadata = { phase, model, contextWindow, repeats, suiteHash, graderVersion: 2, graderHash, implementationHash, mode: "auto", scope: "real chat route + local model; synthetic DB; holdout tasks committed before any run" };
 console.log(JSON.stringify({ ...metadata, file }));
 const results: Result[] = [];
 for (let repeat = 1; repeat <= repeats; repeat++) {
