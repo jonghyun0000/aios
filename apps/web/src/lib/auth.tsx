@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { ApiError, apiKeyStore, get, post, type Me } from "./api.js";
+import { clearAllDrafts } from "./chat-drafts.js";
 
 /**
  * 인증 상태.
@@ -69,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     apiKeyStore.clear();
+    // 공용 컴퓨터에서 다음 사람이 쓰던 글을 보지 않게 대화 초안도 지운다(docs/44).
+    clearAllDrafts();
     // 쿠키 세션이면 서버에서도 폐기한다. API 키 로그인이었다면 세션이 없어 404가 나는데,
     // 그건 정상이므로 삼킨다.
     await post("/v1/auth/logout").catch(() => undefined);

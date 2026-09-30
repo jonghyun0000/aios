@@ -13,6 +13,7 @@ import { presentWorkspaceContext, type WorkspacePresentation } from "../lib/work
 import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { ExecutionPanel } from "../components/ExecutionPanel.js";
 import { RESUME_PROMPT } from "../lib/goal-flow.js";
+import { NEW_CHAT, loadDraft, saveDraft } from "../lib/chat-drafts.js";
 import { takeDataAnalysisDraft } from "../lib/data-analysis-draft.js";
 import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/types.js";
 
@@ -59,6 +60,20 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const history = useMessages(sessionId);
 
   const [input, setInput] = useState("");
+  // 대화별 초안(docs/44). 저장은 입력이 바뀌는 그 순간의 대화 키로 한다 — 전환 직후의 늦은 저장이
+  // 이전 대화의 글을 새 대화에 옮겨 적지 않게.
+  const draftKeyRef = useRef(NEW_CHAT);
+  const [draftNotice, setDraftNotice] = useState("");
+  // 이어서 하기 대상은 새로고침하면 사라진다. 그 동안의 입력을 초안으로 남기면 새로고침 뒤
+  // "이전 실행을 이어서…" 문장이 실제 이어서 하기 없이 일반 메시지로 전송된다. 그래서 보관하지 않는다.
+  const resumeActiveRef = useRef(false);
+  const updateInput = useCallback((value: string, key = draftKeyRef.current) => {
+    setInput(value);
+    if (resumeActiveRef.current && key === draftKeyRef.current) { setDraftNotice(""); return; }
+    const result = saveDraft(key, value);
+    setDraftNotice(result === "too_long" ? "초안이 너무 길어(50,000자 초과) 이 브라우저에 보관하지 않습니다. 전송 전에 새로고침하면 사라집니다."
+      : result === "unavailable" && value.trim() ? "이 브라우저에서는 초안을 보관할 수 없습니다. 새로고침하면 사라집니다." : "");
+  }, []);
   const [live, setLive] = useState<LiveTurn | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -71,6 +86,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const [executionRevision, setExecutionRevision] = useState(0);
   // 이어서 할 실행. 전송 한 번에만 쓰고 비운다(같은 실행을 두 번 이어서 하지 않게).
   const [resumeTarget, setResumeTarget] = useState<{ id: string; goal: string } | null>(null);
+  useEffect(() => { resumeActiveRef.current = resumeTarget !== null; }, [resumeTarget]);
   const [mode, setMode] = useState<ChatMode>("auto");
   const [model, setModel] = useState("");
   const [modelList, setModelList] = useState<{ loading: boolean; models: ModelSnapshot[]; error: string | null }>({ loading: true, models: [], error: null });
@@ -128,14 +144,20 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   useEffect(() => () => { abortRef.current?.abort(); setBusy(false); }, [setBusy]);
   // 공공통계 화면의 선택값은 URL에 넣지 않는다. URL은 브라우저 이력·공유 화면에 남기 쉽고,
   // 초안도 모델로 자동 전송하지 않아 사용자가 수치·질문을 먼저 검토할 수 있게 한다.
+  // 대화를 바꾸면 그 대화의 초안을 불러온다. 아래 통계 초안 효과보다 먼저 선언해야 덮어쓰지 않는다.
+  useEffect(() => {
+    draftKeyRef.current = sessionId ?? NEW_CHAT;
+    setInput(loadDraft(draftKeyRef.current));
+    setDraftNotice("");
+  }, [sessionId]);
   useEffect(() => {
     if (sessionId) return;
     const draft = takeDataAnalysisDraft();
     if (!draft) return;
-    setInput(draft.prompt);
+    updateInput(draft.prompt, NEW_CHAT);
     setContextNotice(`‘${draft.label}’ 통계 분석 초안을 넣었습니다. 확인·수정한 뒤 전송하세요.`);
     queueMicrotask(() => textareaRef.current?.focus());
-  }, [sessionId]);
+  }, [sessionId, updateInput]);
   useEffect(() => {
     followScrollRef.current = true;
     setOpenEvidence(null);
@@ -216,6 +238,9 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       target ??= await createSession(content.slice(0, 60), controller.signal);
       controller.signal.throwIfAborted();
       setInput("");
+      // 전송을 시작했으니 이 대화의 초안은 끝났다. 새 대화에서 보냈다면 "새 대화" 초안도 지운다.
+      saveDraft(target, "");
+      if (!sessionId) saveDraft(NEW_CHAT, "");
       setPendingMessage(content);
       const resumeRunId = toolsEnabled && resumeTarget && target === sessionId ? resumeTarget.id : undefined;
       setResumeTarget(null);
@@ -225,7 +250,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       const detail = err instanceof Error ? err.message : String(err);
       streamErrorRef.current = detail;
       setSendError(detail);
-      setInput(content);
+      // 실제로 보내려던 대화의 초안으로 되살린다(새 대화를 만든 뒤 실패했으면 그 대화).
+      updateInput(content, target ?? NEW_CHAT);
     } finally {
       abortRef.current = null;
       // 스트림 도중 온 에러는 live를 비우기 전에 영구 표시 영역으로 옮긴다.
@@ -248,7 +274,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
       setBusy(false);
       setExecutionRevision((old) => old + 1);
     }
-  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, resumeTarget, mode, model, useMemory]);
+  }, [input, sessionId, createSession, history, refreshSessions, setBusy, toolsEnabled, verificationCommand, resumeTarget, mode, model, useMemory, updateInput]);
 
   /*
    * 스크린리더에 알릴 상태 문구.
@@ -382,7 +408,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
             // 명령 없는 목표를 선택하면 다른 목표의 검증 명령이 초안에 섞이지 않게 비운다.
             setVerificationCommand(run.verificationCommand ?? "");
             setResumeTarget({ id: run.id, goal: run.goal });
-            setInput((old) => old.trim() ? old : RESUME_PROMPT);
+            resumeActiveRef.current = true;
+            if (!input.trim()) updateInput(RESUME_PROMPT);
             queueMicrotask(() => textareaRef.current?.focus());
           }} />}
           {resumeTarget && <div className="small mode-hint resume-notice" role="status" data-testid="resume-notice">
@@ -422,7 +449,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
             <p className="muted">끄면 다음 요청부터 이전 대화·답변 선호를 불러오지 않습니다. 채팅 저장을 끄거나 기존 대화를 삭제하는 기능은 아닙니다. 다시 켜면 기억을 사용합니다.</p>
             <p className="muted">이 대화의 최근 본문 최대 100개와 사용자 요청 최대 500개에서 언어·형식·길이 선호를 확인합니다. 입력 한도로 일부가 제외될 수 있으며, 이번에 명시한 요청이 우선입니다.</p>
             <button disabled={sending || workspaceStarting || !!input.trim()} onClick={() => {
-              setInput("이 대화의 답변 선호를 초기화해줘.");
+              updateInput("이 대화의 답변 선호를 초기화해줘.");
               textareaRef.current?.focus();
             }}>답변 선호 초기화 문장 넣기</button>
             <p className="muted">빈 입력란에 문장만 넣습니다. 이 문장을 단독으로 전송하면 답변 선호를 초기화하며 기존 대화는 보존합니다. 초안이 있다면 먼저 전송하거나 별도로 보관한 뒤 입력란을 비워주세요.</p>
@@ -448,7 +475,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
               disabled={sending || workspaceStarting}
               placeholder="메시지를 입력하세요…"
               aria-describedby="composer-help"
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => updateInput(e.target.value)}
               onCompositionStart={() => { composingRef.current = true; }}
               onCompositionEnd={() => { composingRef.current = false; }}
               onKeyDown={(e) => {
@@ -464,7 +491,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
               <button className="primary" onClick={() => void send()} disabled={!input.trim() || workspaceStarting}>전송</button>
             )}
           </div>
-          <div className="composer-help small muted" id="composer-help">Enter로 전송 · Shift+Enter로 줄바꿈</div>
+          <div className="composer-help small muted" id="composer-help">Enter로 전송 · Shift+Enter로 줄바꿈 · 쓰던 글은 대화별로 이 브라우저에 보관됩니다</div>
+          {draftNotice && <div className="small alert" role="status" data-testid="draft-notice">{draftNotice}</div>}
         </section>
       </div>
     </div>
