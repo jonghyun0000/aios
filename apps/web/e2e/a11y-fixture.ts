@@ -36,6 +36,8 @@ export async function fixtureApp(page: Page) {
     }
     if (path === `/v1/sessions/${SESSION_ID}/workspace`) return route.fulfill({ json: { session, files: [{ id: "file-a11y", name: "기존 참고자료.txt", project_id: null, bytes: 64 }] } });
     if (path === "/v1/projects") return route.fulfill({ json: { projects: [] } });
+    // 5-5(d75065e)부터 채팅 화면이 설정 모델 목록을 조회한다. 실제 서버 /v1/models 와 같은 모양.
+    if (path === "/v1/models" && method === "GET") return route.fulfill({ json: { models: [{ model: "synthetic-local:8b", provider: "local", open: false, successRate: 1, ewmaLatencyMs: 1500 }] } });
     if (path === `/v1/sessions/${SESSION_ID}/files` && method === "POST") return fixture.fileFails ? error("시험용 파일 저장 실패 · 기존 자료는 보존됩니다.") : route.fulfill({ json: { id: "file-new" } });
     if (path === `/v1/sessions/${SESSION_ID}` && method === "PATCH") return error("시험용 이름 저장 실패");
     if (path === `/v1/sessions/${SESSION_ID}/executions`) return route.fulfill({ json: { runs: fixture.execution ? [run] : [] } });
