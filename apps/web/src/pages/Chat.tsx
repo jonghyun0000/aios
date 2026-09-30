@@ -14,6 +14,7 @@ import { WorkspacePanel } from "../components/WorkspacePanel.js";
 import { ExecutionPanel } from "../components/ExecutionPanel.js";
 import { RESUME_PROMPT } from "../lib/goal-flow.js";
 import { NEW_CHAT, loadDraft, saveDraft } from "../lib/chat-drafts.js";
+import { answerMarkdown, conversationMarkdown, downloadText, exportFileName } from "../lib/answer-export.js";
 import { takeDataAnalysisDraft } from "../lib/data-analysis-draft.js";
 import type { ChatMode, TimingPhase } from "../../../../packages/shared/src/types.js";
 
@@ -56,7 +57,7 @@ function useMessages(sessionId: string | null) {
 
 export function ChatPage({ sessionId }: { sessionId: string | null }) {
   const { navigate } = useRouter();
-  const { refresh: refreshSessions, setBusy } = useSessions();
+  const { refresh: refreshSessions, setBusy, rows: sessionRows } = useSessions();
   const history = useMessages(sessionId);
 
   const [input, setInput] = useState("");
@@ -64,6 +65,8 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   // 이전 대화의 글을 새 대화에 옮겨 적지 않게.
   const draftKeyRef = useRef(NEW_CHAT);
   const [draftNotice, setDraftNotice] = useState("");
+  // 내보내기 결과(docs/45). 성공과 실패를 분리해 실패를 성공처럼 보이지 않게 한다.
+  const [exportNotice, setExportNotice] = useState<{ ok: boolean; text: string } | null>(null);
   // 이어서 하기 대상은 새로고침하면 사라진다. 그 동안의 입력을 초안으로 남기면 새로고침 뒤
   // "이전 실행을 이어서…" 문장이 실제 이어서 하기 없이 일반 메시지로 전송된다. 그래서 보관하지 않는다.
   const resumeActiveRef = useRef(false);
@@ -161,6 +164,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     followScrollRef.current = true;
     setOpenEvidence(null);
+    setExportNotice(null);
     setResumeTarget(null);
     if (!sendingRef.current) { setStrategy(null); setTimings({}); setContextNotice(""); setWorkspaceContext(null); }
     if (activeSessionRef.current && activeSessionRef.current !== sessionId) abortRef.current?.abort();
@@ -294,6 +298,20 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
           : "요청을 보냈습니다. 응답을 기다리는 중"
     : lastAnnouncement;
 
+  const sessionTitle = sessionRows.find((row) => row.id === sessionId)?.title ?? "대화";
+  const copyAnswer = async (messageId: string) => {
+    try {
+      await navigator.clipboard.writeText(answerMarkdown(history.data?.messages ?? [], messageId));
+      setExportNotice({ ok: true, text: "답변을 질문·근거와 함께 Markdown으로 복사했습니다." });
+    } catch (err) {
+      setExportNotice({ ok: false, text: `복사하지 못했습니다: ${err instanceof Error ? err.message : String(err)}. 'Markdown 저장'을 이용하세요.` });
+    }
+  };
+  const saveMarkdown = (text: () => string, suffix: string) => {
+    try { downloadText(exportFileName(sessionTitle, suffix), text()); setExportNotice({ ok: true, text: `${suffix === "대화" ? "대화 전체" : "답변"}를 Markdown 파일로 저장했습니다.` }); }
+    catch (err) { setExportNotice({ ok: false, text: `저장하지 못했습니다: ${err instanceof Error ? err.message : String(err)}` }); }
+  };
+
   return (
     <div className="chat-page">
       {/* 화면에는 보이지 않지만 스크린리더가 읽는다 */}
@@ -308,7 +326,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
           setWorkspaceStarting(true); setBusy(true);
           const controller = new AbortController(); abortRef.current = controller;
           void createSession("새 대화", controller.signal).then(() => setWorkspaceOpen(true)).catch((err: Error) => { if (!controller.signal.aborted) setSendError(err.message); }).finally(() => { abortRef.current = null; setWorkspaceStarting(false); setBusy(false); });
-        }}>자료·프로젝트</button><span className="badge">{mode === "auto" ? "자동 선택" : PATH_LABEL[mode]}</span></div>
+        }}>자료·프로젝트</button>{sessionId && <button disabled={!history.data?.messages.some((m) => m.role === "assistant")} onClick={() => saveMarkdown(() => conversationMarkdown(sessionTitle, history.data?.messages ?? []), "대화")}>대화 내보내기</button>}<span className="badge">{mode === "auto" ? "자동 선택" : PATH_LABEL[mode]}</span></div>
       </div>
       {openEvidence && sessionId && (() => {
         const message = history.data?.messages.find((m) => m.id === openEvidence.messageId);
@@ -349,6 +367,10 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
                           </div>
                         )}
                         {evidence && <EvidenceList evidence={evidence} onOpen={(sourceId) => setOpenEvidence({ messageId: m.id, sourceId })} />}
+                        {m.role === "assistant" && <div className="answer-actions" role="group" aria-label="답변 내보내기">
+                          <button type="button" className="small-button" onClick={() => void copyAnswer(m.id)}>복사</button>
+                          <button type="button" className="small-button" onClick={() => saveMarkdown(() => answerMarkdown(history.data?.messages ?? [], m.id), "답변")}>Markdown 저장</button>
+                        </div>}
                       </div>
                     </div>
                   );
@@ -493,6 +515,7 @@ export function ChatPage({ sessionId }: { sessionId: string | null }) {
           </div>
           <div className="composer-help small muted" id="composer-help">Enter로 전송 · Shift+Enter로 줄바꿈 · 쓰던 글은 대화별로 이 브라우저에 보관됩니다</div>
           {draftNotice && <div className="small alert" role="status" data-testid="draft-notice">{draftNotice}</div>}
+          {exportNotice && <div className={`small ${exportNotice.ok ? "muted" : "alert"}`} role={exportNotice.ok ? "status" : "alert"} data-testid="export-notice">{exportNotice.text}</div>}
         </section>
       </div>
     </div>

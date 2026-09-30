@@ -414,3 +414,7 @@ select:focus-visible {
 .flow-files { margin: 6px 0; padding-left: 18px; overflow-wrap: anywhere; }
 .goal-flow .verdict { display: block; white-space: normal; }
 .resume-control { margin-top: 10px; }
+
+/* 답변 내보내기 (docs/45) */
+.answer-actions { display: flex; gap: 6px; margin-top: 6px; }
+.answer-actions .small-button { font-size: 12px; padding: 2px 8px; }

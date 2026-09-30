@@ -116,6 +116,9 @@ for (const scheme of ["light", "dark"] as const) test.describe(`실제 앱 접�
   test("결함 주입은 키보드 스크롤 퇴행을 실제로 검출한다", async ({ page }) => {
     await fixtureApp(page); await openFixtureChat(page);
     await audit(page, `결함 주입 전 ${scheme}`);
+    // axe 의 scrollable-region-focusable 은 스크롤 영역 안에 초점 가능한 요소가 하나도 없을 때만 위반이다.
+    // 5-7(docs/45)부터 답변마다 내보내기 버튼이 있으므로, 영역 자체의 tabindex 퇴행을 재현하려면 그 버튼도 뺀다.
+    await page.locator(".messages .answer-actions").evaluateAll((groups) => groups.forEach((group) => group.remove()));
     await page.locator(".messages").evaluate((element) => element.removeAttribute("tabindex"));
     const broken = await page.evaluate(async () => window.axe.run(document, { runOnly: ["scrollable-region-focusable"] }));
     expect(broken.violations.some((rule) => rule.id === "scrollable-region-focusable" && rule.nodes.some((node) => node.target.includes(".messages")))).toBe(true);
