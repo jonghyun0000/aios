@@ -68,3 +68,13 @@ SOC2 Type I(6개월) → Type II(18개월). 필요한 증적(감사 로그, 접�
 - 개발 전용 의존성은 게이트 대상이 아니다. moderate/low 는 막지 않는다.
 - `pnpm audit` 는 npm 권고 서비스의 가용성에 의존한다. 서비스 장애 시 job 이 실패할 수 있다.
 - 권고의 실제 악용 가능성 시험(PoC)은 하지 않았다.
+
+### 2026-09-30 추가 조치 — 푸시 직후 원격 감사 실패
+
+9/27 이후 16개 커밋을 푸시한 직후 GitHub CI의 `audit` job 만 실패했다(`verify`·`integration` 성공). 코드 변경 때문이 아니라 **그 사이 새로 공개된 권고**였다: `undici` 7.29.0(우리가 직접 선언, 로컬 모델 어댑터가 사용) 의 high 2건 포함 10건, 간접 의존 `brace-expansion` 5.0.9 의 high 2건 포함 3건. 일주일 전 만든 주간 스케줄·푸시 게이트가 설계대로 동작했다(9/28 스케줄 실행은 당시 코드에서 성공).
+
+- `undici` `^7.29.0` → `^7.30.0` (엔진 요건 Node ≥20.18.1, 우리는 22). 락 7.30.0.
+- `brace-expansion` 5.0.9 → 5.0.12. `minimatch@10`(← `glob@13` ← `@fastify/static`) 이 `^5.0.8` 을 요구해 범위 안이지만 pnpm 9 는 만족하는 하위 의존성을 `update` 로 올리지 않는다. 임시로 `pnpm.overrides` 를 걸어 재해석한 뒤 **override 를 제거**했고 락·`package.json` 에 override 가 남지 않았음을 확인했다(루트 `package.json` diff 0줄).
+- 확인: `pnpm run audit:prod` 0건, `--frozen-lockfile` 설치 통과(CI 조건), 정적 4단계 PASS(단위 615), `@aios/ai` 136/136, 실제 로컬 모델 `qwen3:8b` 응답·`bge-m3` 임베딩 1024차원을 새 undici 로 확인.
+- 한계: 로컬 모델 호출 1회와 단위 시험 범위의 확인이다. 원격 CI 결과는 푸시 뒤 `NEXT_STEPS` 에 기록한다.
+

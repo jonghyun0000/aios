@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "@aios/shared": "workspace:*",
-    "undici": "^7.29.0"
+    "undici": "^7.30.0"
   }
 }
