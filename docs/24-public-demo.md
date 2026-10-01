@@ -56,8 +56,47 @@ JS는 gzip 기준 54,355 bytes다. 다운로드 크기이며 사용자의 체감
 
 접근성 검사는 낮은 작은 글자 대비, 잘못된 ARIA 속성, 승인 대기 중 키보드로 접근할 수 없던 채팅 스크롤을 찾아 수정했다. 일부 동적 화면의 자동 판정 보류는 스크롤 밖 요소·기호의 대비 판정 한계로 별도 검토했다. **전체 WCAG 준수 인증이나 보조기기/독립 신규 사용자의 실사용 시험은 아니다.** 공개 체험판의 통과를 실제 AIOS 전체 제품의 접근성 통과로 대체하지 않는다.
 
-이번 배포는 연결된 배포 도구로 정적 산출물을 올린 수동 배포다. Git 저장소 자동 배포 연결은 설정하지 않았으며 `main` push만으로 사이트가 바뀌지 않는다. 다음 배포도 빌드·정책 검사 후 데모 출력만 배포하고, Production 주소에서 동일성/브라우저 검사를 다시 수행한다. 전체 로컬 서버나 개인 설정을 올리는 배포로 바꾸지 않는다.
+이번 배포는 연결된 배포 도구로 정적 산출물을 올린 수동 배포다. Git 저장소 자동 배포 연결은 설정하지 않았으며 `main` push만으로 사이트가 바뀌지 않는다. 이 문장은 2026-09-12 최초 배포 당시의 기록이다. 2026-10-01부터는 아래 "자동 배포"의 승인 게이트 워크플로를 쓴다(Vercel Git 연결은 여전히 쓰지 않는다). 다음 배포도 빌드·정책 검사 후 데모 출력만 배포하고, Production 주소에서 동일성/브라우저 검사를 다시 수행한다. 전체 로컬 서버나 개인 설정을 올리는 배포로 바꾸지 않는다.
 
 GitHub CI에도 체험판 브라우저 검사를 포함한다. 실제 DB/Docker/LLM/T7 운영 시험이나 클라우드 자동 배포는 포함하지 않는다. 전체 제품 점수와 남은 검증은 [평가표](22-project-scorecard.md)를 따른다.
 
 실제 원격 실행 기록: [`9a5d150` CI 성공](https://github.com/jonghyun0000/aios/actions/runs/34685116460). 이 실행은 Linux의 격리된 정적 데모 서버를 검사하며 위 Production 주소 검사는 별도로 수행했다.
+
+## 자동 배포 (2026-10-01 추가)
+
+`.github/workflows/deploy-demo.yml`이 체험판만 배포한다. 재배포는 여전히 사용자 승인 사항이며, 승인은 GitHub Environment `demo-production`의 Required reviewers가 맡는다.
+
+흐름: (1) `main`에 체험판 관련 경로가 바뀌어 push되거나 Actions에서 수동 실행 → (2) `verify` 잡: 체험판 단위·배포 정책 시험·빌드·로컬 브라우저 회귀 → (3) `demo-production` 승인 대기 → (4) `deploy` 잡: `vercel pull` → `vercel build --prod`로 한 번 빌드 → `scripts/check-vercel-output.mjs`가 업로드 대상(`.vercel/output/static`)이 감사한 빌드와 같은 파일·SHA-256인지, 서버 함수가 없는지 확인 → `vercel deploy --prebuilt --prod` → (5) `verify-public-demo.mjs`가 `https://aios-demo-mu.vercel.app`의 헤더·404·바이트 일치·브라우저 회귀를 확인한다. 별칭 전환 지연에 대비해 원격 주소에서만 최대 120초(`AIOS_DEMO_RETRY_SECONDS`) 같은 검사를 반복하며 판정 기준은 바꾸지 않았다.
+
+왜 이렇게 했는가:
+- Vercel Git 자동 배포는 push 하나로 공개 사이트를 바꾸므로 승인 규칙과 충돌한다. 연결하지 않는다(이중 배포 방지).
+- Vercel 서버에서 다시 빌드하면 검사한 바이트와 공개 바이트가 달라질 수 있다. CI에서 한 번 빌드한 결과를 그대로 올린다.
+- 토큰은 Environment 비밀값에만 둔다. 승인된 `deploy` 잡만 읽고, PR·포크·`verify` 잡은 읽지 못한다.
+
+`scripts/public-demo-policy.test.mjs`의 `validateDeployWorkflow` 시험은 승인 Environment 제거·이름 변경, 쓰기 권한, PR/`pull_request_target` 트리거, 경로 제한 없는 push, main 외 브랜치, 수동 실행 제거, `verify` 의존 제거, 검사 잡·전역 토큰 노출, CLI `latest`, 액션 태그 고정, 서버 재빌드 배포, 업로드 감사 생략·순서 역전, 배포 후 검증 생략, 진행 중 배포 취소의 18가지 결함을 각각 고유한 이유로 거부한다. 검사기에서 승인 게이트·토큰 격리·업로드 바이트 비교를 각각 무력화하면 시험이 실패하는 것도 확인했다(원복 후 `cmp` 일치).
+
+### 사용자가 한 번 해야 하는 설정
+
+1. Vercel 계정 설정 → Tokens에서 만료일이 있는 토큰을 만든다. 가능하면 `aios-demo`가 있는 팀으로 범위를 좁힌다.
+2. `aios-demo` 프로젝트 Settings에서 Project ID와 Team(또는 계정) ID를 확인한다.
+3. GitHub 저장소 Settings → Environments → `demo-production`을 만든다. Required reviewers에 본인을 넣고, Deployment branches를 `main`으로 제한한다.
+4. 이 Environment의 비밀값으로 `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`를 등록한다(저장소 전체 비밀값이 아니라).
+5. Vercel 프로젝트의 Git 연결은 끈 상태로 둔다.
+
+설정 전에 워크플로가 실행되면 `deploy` 잡은 승인 없이 바로 시작되지만 토큰이 없어 `vercel pull`에서 실패한다. Required reviewers를 먼저 설정해야 한다.
+
+되돌리기: 공개 주소 검증이 실패하면 Production에는 이미 새 배포가 반영된 상태다. Vercel 대시보드 Deployments에서 이전 배포를 Promote하거나 `vercel rollback`으로 되돌리고, 실패 실행 링크를 이 문서에 기록한다.
+
+### 2026-10-01 구현 검증 (클라우드 세션)
+
+| 검사 | 결과 |
+| --- | --- |
+| 정적 4단계(`verify-all`) | PASS. 단위 615/615 |
+| CI의 node 시험 8파일 | 64/64 PASS |
+| 배포 정책 시험 | 6/6 PASS. 워크플로 결함 18종 각각 의도한 이유로 거부, 업로드 대상 변조·추가·누락·서버 함수·라우트 누락 거부 |
+| 검사기 역주입 | 승인 게이트·토큰 격리·바이트 비교 검사를 각각 끄면 시험 1건 실패 → 원복 `cmp` 일치 |
+| actionlint 1.7.7 | `deploy-demo.yml`·`ci.yml` 오류 0 |
+| 로컬 체험판 브라우저 회귀 | 24/24 PASS |
+| 원격 재시도 | 공개 주소가 응답하지 않을 때 10초 간격 재시도 후 원래 오류로 실패, 범위 밖 값(9999초) 거부 |
+
+**미검증:** 실제 Vercel 배포, GitHub Environment 승인 흐름, `vercel build`의 `.vercel/output/static`이 데모 빌드와 같은 파일 집합인지(Vercel이 다른 파일을 추가하면 `check-vercel-output.mjs`가 배포 전에 실패한다), 공개 주소 자체. 이 세션의 네트워크 정책이 `vercel.app`을 차단(프록시 403)해 현재 공개 배포 상태도 확인하지 못했다. 첫 실제 배포 결과는 사용자 설정 후 별도로 기록한다.
