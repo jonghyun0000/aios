@@ -84,7 +84,7 @@
   /Library/Developer/CommandLineTools/usr/bin/git diff --cached -U0 | grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{30,}|BEGIN [A-Z ]*PRIVATE KEY' || echo "비밀 패턴 없음"
   ```
 - **푸시는 사용자에게 확인받은 뒤에만 한다.** 공개 저장소다. 푸시한 뒤에는 해당 SHA 의 CI 결과를 확인해 기록한다(`gh run list --repo jonghyun0000/aios --limit 5`).
-- 공개 체험판(Vercel)은 푸시해도 갱신되지 않는다. 재배포는 사용자 승인 사항이다.
+- 공개 체험판(Vercel)은 푸시만으로 갱신되지 않는다. 재배포는 사용자 승인 사항이며, 2026-10-01부터 `deploy-demo.yml`의 `demo-production` 승인으로 처리한다(`docs/24` "자동 배포").
 
 ### 3.5 끝낼 때 정리 (HANDOFF §11 에 더해)
 - 띄운 API 서버는 리스너 PID 가 아니라 `… --filter @aios/api dev` **래퍼 PID** 에 SIGTERM 을 보낸다. 리스너만 죽이면 래퍼와 tsx 가 고아로 남는다.

@@ -25,17 +25,31 @@ try {
   if (external && ["username", "password", "search", "hash"].some(key => new URL(external)[key])) throw new Error("인증 정보나 임시 공유 토큰 없는 공개 주소를 사용하세요.");
   if (!external) server = await serveDemo({ port: 0 });
   const url = external ?? `http://127.0.0.1:${server.address().port}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(20_000), redirect: "error" });
-  assert.equal(response.status, 200);
   const expectedHeaders = validateDemoPolicy(JSON.parse(await readFile(join(root, "vercel.json"), "utf8")));
-  for (const [key, value] of Object.entries(expectedHeaders)) assert.equal(response.headers.get(key), value, key);
-  // 예전 배포의 화면도 통과하는 거짓 양성을 막는다. 공개 바이트가 이번 빌드와 같아야 한다.
-  for (const file of build.files) {
-    const deployed = await fetch(new URL(file.path, url), { signal: AbortSignal.timeout(20_000), redirect: "error" });
-    assert.equal(deployed.status, 200, file.path);
-    const bytes = Buffer.from(await deployed.arrayBuffer());
-    assert.equal(bytes.length, file.bytes, file.path);
-    assert.equal(createHash("sha256").update(bytes).digest("hex"), file.sha256, file.path);
+  const checkPublishedBytes = async () => {
+    const response = await fetch(url, { signal: AbortSignal.timeout(20_000), redirect: "error" });
+    assert.equal(response.status, 200);
+    for (const [key, value] of Object.entries(expectedHeaders)) assert.equal(response.headers.get(key), value, key);
+    // 예전 배포의 화면도 통과하는 거짓 양성을 막는다. 공개 바이트가 이번 빌드와 같아야 한다.
+    for (const file of build.files) {
+      const deployed = await fetch(new URL(file.path, url), { signal: AbortSignal.timeout(20_000), redirect: "error" });
+      assert.equal(deployed.status, 200, file.path);
+      const bytes = Buffer.from(await deployed.arrayBuffer());
+      assert.equal(bytes.length, file.bytes, file.path);
+      assert.equal(createHash("sha256").update(bytes).digest("hex"), file.sha256, file.path);
+    }
+  };
+  // 배포 직후 Production 별칭이 새 배포로 넘어가기까지 지연이 있을 수 있다. 원격 주소에서만
+  // 같은 검사를 기한 안에서 반복한다. 기한이 지나도 다르면 원래 오류로 실패한다(판정 기준은 그대로).
+  const retrySeconds = external ? Number(process.env.AIOS_DEMO_RETRY_SECONDS ?? 0) : 0;
+  if (!Number.isFinite(retrySeconds) || retrySeconds < 0 || retrySeconds > 600) throw new Error("AIOS_DEMO_RETRY_SECONDS는 0~600초여야 합니다.");
+  const deadline = Date.now() + retrySeconds * 1000;
+  for (let attempt = 1; ; attempt++) {
+    try { await checkPublishedBytes(); break; } catch (error) {
+      if (Date.now() + 10_000 > deadline) throw error;
+      console.log(`RETRY 공개 바이트 불일치 또는 응답 오류(${attempt}회) — 10초 뒤 다시 확인`);
+      await new Promise(done => setTimeout(done, 10_000));
+    }
   }
   record("HTTP 200·전체 보안 헤더·현재 빌드와 공개 바이트 일치");
   for (const path of ["/.env", "/v1/me", "/not-a-real-page"]) {
